@@ -7,7 +7,7 @@ import { TransactionForm } from "@/components/transactions/TransactionForm";
 import { TransactionList } from "@/components/transactions/TransactionList";
 import { BudgetPlanner } from "@/components/budget/BudgetPlanner";
 import { YearlyReport } from "@/components/reports/YearlyReport";
-import { PDFUploader } from "@/components/upload/PDFUploader";
+import { FileUploader } from "@/components/upload/FileUploader";
 import { Transaction } from "@/types/finance";
 
 const Index = () => {
@@ -58,7 +58,7 @@ const Index = () => {
               📈 Relatórios
             </TabsTrigger>
             <TabsTrigger value="upload" className="data-[state=active]:bg-teal-500 data-[state=active]:text-white">
-              📄 Upload PDF
+              📄 Upload
             </TabsTrigger>
           </TabsList>
 
@@ -99,7 +99,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="upload" className="space-y-6">
-            <PDFUploader onDataExtracted={(data) => {
+            <FileUploader onDataExtracted={(data) => {
               data.forEach(transaction => addTransaction(transaction));
             }} />
           </TabsContent>

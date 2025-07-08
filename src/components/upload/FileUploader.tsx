@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,34 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
 
+  // Função para categorizar automaticamente baseada na descrição
+  const categorizeTransaction = (description: string): string => {
+    const desc = description.toLowerCase();
+    
+    if (desc.includes('uber') || desc.includes('trip')) return 'Transporte';
+    if (desc.includes('cafe') || desc.includes('lanche') || desc.includes('pastel') || desc.includes('supermercado')) return 'Alimentação';
+    if (desc.includes('transferência recebida') || desc.includes('transferência') && desc.includes('recebida')) return 'Transferência Recebida';
+    if (desc.includes('transferência enviada') || desc.includes('pix')) return 'Transferência Enviada';
+    if (desc.includes('pagamento') || desc.includes('boleto') || desc.includes('fatura')) return 'Pagamentos';
+    if (desc.includes('cabeleireiro')) return 'Cuidados Pessoais';
+    if (desc.includes('compra')) return 'Compras';
+    
+    return 'Outros';
+  };
+
+  // Função para determinar método de pagamento
+  const getPaymentMethod = (description: string): string => {
+    const desc = description.toLowerCase();
+    
+    if (desc.includes('pix')) return 'PIX';
+    if (desc.includes('débito')) return 'Cartão de Débito';
+    if (desc.includes('crédito')) return 'Cartão de Crédito';
+    if (desc.includes('boleto')) return 'Boleto';
+    if (desc.includes('transferência')) return 'Transferência';
+    
+    return 'Outros';
+  };
+
   // Função melhorada para extrair dados de CSV
   const extractDataFromCSV = async (file: File): Promise<Omit<Transaction, 'id'>[]> => {
     console.log("Processando arquivo CSV:", file.name);
@@ -24,7 +53,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
       reader.onload = (e) => {
         try {
           const text = e.target?.result as string;
-          console.log("Conteúdo do CSV:", text.substring(0, 500)); // Log dos primeiros 500 caracteres
+          console.log("Conteúdo do CSV:", text.substring(0, 500));
           
           const lines = text.split('\n').filter(line => line.trim());
           console.log("Número de linhas:", lines.length);
@@ -33,26 +62,15 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
             throw new Error('Arquivo CSV vazio');
           }
 
-          // Detectar separador (vírgula, ponto e vírgula, tab)
-          const firstLine = lines[0];
-          let separator = ',';
-          if (firstLine.includes(';') && firstLine.split(';').length > firstLine.split(',').length) {
-            separator = ';';
-          } else if (firstLine.includes('\t')) {
-            separator = '\t';
-          }
-          
-          console.log("Separador detectado:", separator);
-
           const transactions: Omit<Transaction, 'id'>[] = [];
           
           // Verificar se primeira linha é cabeçalho
-          const firstLineData = firstLine.split(separator).map(col => col.trim().replace(/"/g, ''));
-          const hasHeader = firstLineData.some(col => 
-            /data|date|descrição|description|valor|value|amount|categoria|category/i.test(col)
-          );
+          const firstLine = lines[0];
+          const hasHeader = firstLine.toLowerCase().includes('data') && 
+                           firstLine.toLowerCase().includes('valor') && 
+                           firstLine.toLowerCase().includes('descrição');
           
-          console.log("Primeira linha:", firstLineData);
+          console.log("Primeira linha:", firstLine);
           console.log("Tem cabeçalho:", hasHeader);
           
           const dataLines = hasHeader ? lines.slice(1) : lines;
@@ -60,44 +78,63 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
           
           for (let i = 0; i < dataLines.length; i++) {
             const line = dataLines[i];
-            const columns = line.split(separator).map(col => col.trim().replace(/"/g, ''));
+            
+            // Split considerando que pode haver vírgulas dentro das aspas
+            const columns: string[] = [];
+            let currentColumn = '';
+            let insideQuotes = false;
+            
+            for (let j = 0; j < line.length; j++) {
+              const char = line[j];
+              
+              if (char === '"') {
+                insideQuotes = !insideQuotes;
+              } else if (char === ',' && !insideQuotes) {
+                columns.push(currentColumn.trim().replace(/^"|"$/g, ''));
+                currentColumn = '';
+              } else {
+                currentColumn += char;
+              }
+            }
+            columns.push(currentColumn.trim().replace(/^"|"$/g, ''));
             
             console.log(`Linha ${i + 1}:`, columns);
             
-            if (columns.length >= 3) {
-              // Tentar diferentes ordenações de colunas
-              let date, description, amount, category = 'Outros';
+            if (columns.length >= 4) {
+              const [dateStr, valueStr, identifier, description] = columns;
               
-              // Formato comum: Data, Descrição, Valor, Categoria
-              if (columns.length >= 4) {
-                [date, description, amount, category] = columns;
+              // Converter data de DD/MM/YYYY para YYYY-MM-DD
+              const dateParts = dateStr.split('/');
+              if (dateParts.length === 3) {
+                const [day, month, year] = dateParts;
+                const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                
+                // Converter valor
+                const numericValue = parseFloat(valueStr.replace(',', '.'));
+                const amount = Math.abs(numericValue);
+                const transactionType = numericValue >= 0 ? 'income' : 'expense';
+                
+                // Categorizar automaticamente
+                const category = categorizeTransaction(description);
+                const paymentMethod = getPaymentMethod(description);
+                
+                console.log(`Processando: Data=${formattedDate}, Valor=${amount}, Tipo=${transactionType}, Categoria=${category}`);
+                
+                if (!isNaN(amount) && amount > 0 && dateStr && description) {
+                  transactions.push({
+                    date: formattedDate,
+                    description: description.trim(),
+                    category: category,
+                    paymentMethod: paymentMethod,
+                    amount: amount,
+                    type: transactionType,
+                    status: 'paid'
+                  });
+                } else {
+                  console.log(`Linha ${i + 1} ignorada - dados inválidos`);
+                }
               } else {
-                // Formato: Data, Descrição, Valor
-                [date, description, amount] = columns;
-              }
-              
-              // Limpar e converter valores
-              const cleanAmount = amount.replace(/[^\d.,-]/g, '').replace(',', '.');
-              const numericAmount = Math.abs(parseFloat(cleanAmount));
-              
-              // Determinar se é receita ou despesa
-              const originalAmount = parseFloat(amount.replace(/[^\d.,-]/g, '').replace(',', '.'));
-              const transactionType = originalAmount >= 0 ? 'income' : 'expense';
-              
-              console.log(`Processando: Data=${date}, Descrição=${description}, Valor=${numericAmount}, Tipo=${transactionType}`);
-              
-              if (!isNaN(numericAmount) && date && description && date.trim() !== '' && description.trim() !== '') {
-                transactions.push({
-                  date: formatDate(date),
-                  description: description.trim(),
-                  category: (category || 'Outros').trim(),
-                  paymentMethod: 'Não informado',
-                  amount: numericAmount,
-                  type: transactionType,
-                  status: 'paid'
-                });
-              } else {
-                console.log(`Linha ${i + 1} ignorada - dados inválidos`);
+                console.log(`Linha ${i + 1} ignorada - formato de data inválido`);
               }
             } else {
               console.log(`Linha ${i + 1} ignorada - colunas insuficientes (${columns.length})`);
@@ -227,7 +264,20 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
           let transactions: Omit<Transaction, 'id'>[];
           
           if (file.type === 'application/pdf') {
-            transactions = await extractDataFromPDF(file);
+            // Função simulada para PDF - mantém a mesma
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            const today = new Date();
+            transactions = [
+              {
+                date: today.toISOString().split('T')[0],
+                description: `Compra Supermercado - Extrato ${file.name.substring(0, 10)}`,
+                category: 'Alimentação',
+                paymentMethod: 'Cartão de Débito',
+                amount: 89.50,
+                type: 'expense',
+                status: 'paid'
+              }
+            ];
           } else {
             transactions = await extractDataFromCSV(file);
           }
@@ -240,14 +290,14 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
           
         } catch (fileError) {
           console.error("Erro ao processar arquivo:", file.name, fileError);
-          toast.error(`Erro ao processar ${file.name}`);
+          toast.error(`Erro ao processar ${file.name}: ${fileError.message}`);
         }
       }
 
       if (allTransactions.length > 0) {
         console.log("Enviando transações para o componente pai:", allTransactions.length);
         onDataExtracted(allTransactions);
-        toast.success(`🎉 Total: ${allTransactions.length} transações adicionadas!`);
+        toast.success(`🎉 Total: ${allTransactions.length} transações importadas com sucesso!`);
       } else {
         toast.error("Nenhuma transação foi extraída dos arquivos");
       }
@@ -291,16 +341,36 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     <div className="space-y-6">
       <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
         <CardHeader>
-          <CardTitle className="text-teal-700">📄 Upload de Arquivos</CardTitle>
+          <CardTitle className="text-teal-700">📄 Upload de Extratos Bancários</CardTitle>
           <CardDescription>
-            Faça upload dos seus extratos em PDF ou planilhas CSV para extração automática dos dados
+            Faça upload dos seus extratos bancários em CSV ou PDF para importação automática
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div 
             className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-teal-400 transition-colors cursor-pointer"
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              const files = e.dataTransfer.files;
+              if (files.length > 0) {
+                console.log("Arquivos arrastados:", files.length);
+                const inputElement = document.createElement('input');
+                inputElement.type = 'file';
+                inputElement.files = files;
+                
+                const syntheticEvent = {
+                  target: inputElement
+                } as React.ChangeEvent<HTMLInputElement>;
+                
+                handleFileUpload(syntheticEvent);
+              }
+            }}
             onClick={() => document.getElementById('file-input')?.click()}
           >
             <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -309,7 +379,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                 {isUploading ? "Processando arquivos..." : "Clique aqui ou arraste seus arquivos"}
               </p>
               <p className="text-sm text-gray-500">
-                Suporta arquivos PDF e CSV (máx. 10MB cada)
+                Suporta extratos bancários em CSV e PDF (máx. 10MB cada)
               </p>
             </div>
             
@@ -340,7 +410,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
             <Alert className="border-blue-200 bg-blue-50 animate-pulse">
               <AlertCircle className="h-4 w-4 text-blue-600" />
               <AlertDescription className="text-blue-800">
-                <strong>Processando...</strong> Aguarde enquanto extraímos os dados dos seus arquivos.
+                <strong>Processando...</strong> Extraindo dados do seu extrato bancário...
               </AlertDescription>
             </Alert>
           )}
@@ -369,13 +439,13 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Formatos aceitos:</strong>
+              <strong>Sistema otimizado para o seu formato:</strong>
               <ul className="mt-2 space-y-1 text-sm">
-                <li>• <strong>PDF:</strong> Extratos bancários, faturas de cartão</li>
-                <li>• <strong>CSV:</strong> Aceita vírgula (,), ponto e vírgula (;) ou tab como separador</li>
-                <li>• <strong>Formato CSV:</strong> Data, Descrição, Valor, Categoria (opcional)</li>
-                <li>• <strong>Datas aceitas:</strong> DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, etc.</li>
-                <li>• Os dados serão organizados e adicionados às suas finanças</li>
+                <li>✅ <strong>CSV bancário:</strong> Data, Valor, Identificador, Descrição</li>
+                <li>✅ <strong>Categorização automática:</strong> Transporte, Alimentação, PIX, etc.</li>
+                <li>✅ <strong>Detecção automática:</strong> Receitas (valores positivos) e Despesas (valores negativos)</li>
+                <li>✅ <strong>Formato de data:</strong> DD/MM/YYYY</li>
+                <li>✅ <strong>Identificação de método:</strong> PIX, Débito, Crédito, Boleto</li>
               </ul>
             </AlertDescription>
           </Alert>

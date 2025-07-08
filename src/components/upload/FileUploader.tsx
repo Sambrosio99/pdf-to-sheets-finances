@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
 
-  // Função para extrair dados de CSV
+  // Função melhorada para extrair dados de CSV
   const extractDataFromCSV = async (file: File): Promise<Omit<Transaction, 'id'>[]> => {
     console.log("Processando arquivo CSV:", file.name);
     
@@ -25,38 +24,90 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
       reader.onload = (e) => {
         try {
           const text = e.target?.result as string;
+          console.log("Conteúdo do CSV:", text.substring(0, 500)); // Log dos primeiros 500 caracteres
+          
           const lines = text.split('\n').filter(line => line.trim());
+          console.log("Número de linhas:", lines.length);
+          
+          if (lines.length === 0) {
+            throw new Error('Arquivo CSV vazio');
+          }
+
+          // Detectar separador (vírgula, ponto e vírgula, tab)
+          const firstLine = lines[0];
+          let separator = ',';
+          if (firstLine.includes(';') && firstLine.split(';').length > firstLine.split(',').length) {
+            separator = ';';
+          } else if (firstLine.includes('\t')) {
+            separator = '\t';
+          }
+          
+          console.log("Separador detectado:", separator);
+
           const transactions: Omit<Transaction, 'id'>[] = [];
           
-          // Ignorar cabeçalho se existir
-          const dataLines = lines.slice(1);
+          // Verificar se primeira linha é cabeçalho
+          const firstLineData = firstLine.split(separator).map(col => col.trim().replace(/"/g, ''));
+          const hasHeader = firstLineData.some(col => 
+            /data|date|descrição|description|valor|value|amount|categoria|category/i.test(col)
+          );
           
-          for (const line of dataLines) {
-            const columns = line.split(',').map(col => col.trim().replace(/"/g, ''));
+          console.log("Primeira linha:", firstLineData);
+          console.log("Tem cabeçalho:", hasHeader);
+          
+          const dataLines = hasHeader ? lines.slice(1) : lines;
+          console.log("Linhas de dados:", dataLines.length);
+          
+          for (let i = 0; i < dataLines.length; i++) {
+            const line = dataLines[i];
+            const columns = line.split(separator).map(col => col.trim().replace(/"/g, ''));
             
-            if (columns.length >= 4) {
-              // Assumindo formato: Data, Descrição, Valor, Categoria
-              const [date, description, amount, category = 'Outros'] = columns;
+            console.log(`Linha ${i + 1}:`, columns);
+            
+            if (columns.length >= 3) {
+              // Tentar diferentes ordenações de colunas
+              let date, description, amount, category = 'Outros';
               
-              const numericAmount = Math.abs(parseFloat(amount.replace(/[^\d.-]/g, '')));
-              const transactionType = parseFloat(amount.replace(/[^\d.-]/g, '')) >= 0 ? 'income' : 'expense';
+              // Formato comum: Data, Descrição, Valor, Categoria
+              if (columns.length >= 4) {
+                [date, description, amount, category] = columns;
+              } else {
+                // Formato: Data, Descrição, Valor
+                [date, description, amount] = columns;
+              }
               
-              if (!isNaN(numericAmount) && date && description) {
+              // Limpar e converter valores
+              const cleanAmount = amount.replace(/[^\d.,-]/g, '').replace(',', '.');
+              const numericAmount = Math.abs(parseFloat(cleanAmount));
+              
+              // Determinar se é receita ou despesa
+              const originalAmount = parseFloat(amount.replace(/[^\d.,-]/g, '').replace(',', '.'));
+              const transactionType = originalAmount >= 0 ? 'income' : 'expense';
+              
+              console.log(`Processando: Data=${date}, Descrição=${description}, Valor=${numericAmount}, Tipo=${transactionType}`);
+              
+              if (!isNaN(numericAmount) && date && description && date.trim() !== '' && description.trim() !== '') {
                 transactions.push({
                   date: formatDate(date),
-                  description: description,
-                  category: category || 'Outros',
+                  description: description.trim(),
+                  category: (category || 'Outros').trim(),
                   paymentMethod: 'Não informado',
                   amount: numericAmount,
                   type: transactionType,
                   status: 'paid'
                 });
+              } else {
+                console.log(`Linha ${i + 1} ignorada - dados inválidos`);
               }
+            } else {
+              console.log(`Linha ${i + 1} ignorada - colunas insuficientes (${columns.length})`);
             }
           }
           
+          console.log(`Total de transações extraídas: ${transactions.length}`);
           resolve(transactions);
         } catch (error) {
+          console.error("Erro ao processar CSV:", error);
           reject(error);
         }
       };
@@ -65,28 +116,41 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     });
   };
 
-  // Função para formatar data
+  // Função melhorada para formatar data
   const formatDate = (dateStr: string): string => {
+    console.log("Formatando data:", dateStr);
+    
+    // Remover espaços e caracteres especiais
+    const cleanDate = dateStr.trim();
+    
     // Tentar diferentes formatos de data
     const formats = [
-      /(\d{1,2})\/(\d{1,2})\/(\d{4})/,  // DD/MM/YYYY
-      /(\d{4})-(\d{1,2})-(\d{1,2})/,   // YYYY-MM-DD
-      /(\d{1,2})-(\d{1,2})-(\d{4})/    // DD-MM-YYYY
+      /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,     // DD/MM/YYYY
+      /^(\d{1,2})-(\d{1,2})-(\d{4})$/,      // DD-MM-YYYY  
+      /^(\d{4})-(\d{1,2})-(\d{1,2})$/,      // YYYY-MM-DD
+      /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/,    // YYYY/MM/DD
+      /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/,    // DD.MM.YYYY
     ];
     
-    for (const format of formats) {
-      const match = dateStr.match(format);
+    for (let i = 0; i < formats.length; i++) {
+      const format = formats[i];
+      const match = cleanDate.match(format);
       if (match) {
-        if (format === formats[1]) { // YYYY-MM-DD
-          return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
-        } else { // DD/MM/YYYY ou DD-MM-YYYY
-          return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+        let formattedDate;
+        if (i === 2 || i === 3) { // YYYY-MM-DD ou YYYY/MM/DD
+          formattedDate = `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+        } else { // DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+          formattedDate = `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
         }
+        console.log(`Data formatada: ${cleanDate} -> ${formattedDate}`);
+        return formattedDate;
       }
     }
     
     // Se não conseguir parsear, usar data atual
-    return new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+    console.log(`Data não reconhecida: ${cleanDate}, usando: ${today}`);
+    return today;
   };
 
   // Função simulada para extrair dados do PDF
@@ -308,8 +372,9 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
               <strong>Formatos aceitos:</strong>
               <ul className="mt-2 space-y-1 text-sm">
                 <li>• <strong>PDF:</strong> Extratos bancários, faturas de cartão</li>
-                <li>• <strong>CSV:</strong> Planilhas com dados de transações</li>
-                <li>• Para CSV, use o formato: Data, Descrição, Valor, Categoria</li>
+                <li>• <strong>CSV:</strong> Aceita vírgula (,), ponto e vírgula (;) ou tab como separador</li>
+                <li>• <strong>Formato CSV:</strong> Data, Descrição, Valor, Categoria (opcional)</li>
+                <li>• <strong>Datas aceitas:</strong> DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, etc.</li>
                 <li>• Os dados serão organizados e adicionados às suas finanças</li>
               </ul>
             </AlertDescription>

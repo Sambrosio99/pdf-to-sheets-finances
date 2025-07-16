@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +31,7 @@ export const TransactionForm = ({ onSubmit }: TransactionFormProps) => {
     'PIX', 'Transferência', 'Boleto', 'Outros'
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.description || !formData.category || !formData.amount) {
@@ -40,7 +39,7 @@ export const TransactionForm = ({ onSubmit }: TransactionFormProps) => {
       return;
     }
 
-    onSubmit({
+    await onSubmit({
       ...formData,
       amount: parseFloat(formData.amount)
     });
@@ -55,8 +54,6 @@ export const TransactionForm = ({ onSubmit }: TransactionFormProps) => {
       type: 'expense',
       status: 'paid'
     });
-
-    toast.success("Transação adicionada com sucesso!");
   };
 
   return (

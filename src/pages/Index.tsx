@@ -138,7 +138,7 @@ export default function Index() {
               </CardHeader>
               <CardContent>
                 <FileUploader
-                  onFileUpload={async (transactions) => {
+                  onUpload={async (transactions) => {
                     setIsUploading(true);
                     await addMultipleTransactions(transactions);
                     setIsUploading(false);

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const corsHeaders = {
@@ -14,16 +13,17 @@ serve(async (req) => {
   try {
     const { action, transactions, sheetsId } = await req.json()
     
-    // Pegar as credenciais do service account
-    const serviceAccountKey = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_KEY')
+    // Pegar as credenciais do service account - usando o nome correto do segredo
+    const serviceAccountKey = Deno.env.get('CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE')
     
     console.log('Verificando Service Account...', {
-      'GOOGLE_SERVICE_ACCOUNT_KEY': !!serviceAccountKey
+      'CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE': !!serviceAccountKey,
+      'Tamanho da chave': serviceAccountKey ? serviceAccountKey.length : 0
     })
     
     if (!serviceAccountKey) {
-      console.error('Google Service Account key não encontrada. Configure GOOGLE_SERVICE_ACCOUNT_KEY no Supabase.')
-      throw new Error('Google Service Account key not configured. Please add GOOGLE_SERVICE_ACCOUNT_KEY to your Supabase secrets.')
+      console.error('Google Service Account key não encontrada. Configure CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE no Supabase.')
+      throw new Error('Google Service Account key not configured. Please add CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE to your Supabase secrets.')
     }
 
     console.log(`Google Sheets Integration - Action: ${action}`)
@@ -53,7 +53,9 @@ serve(async (req) => {
 
 async function getAccessToken(serviceAccountKey: string) {
   try {
+    console.log('Iniciando processo de autenticação...')
     const credentials = JSON.parse(serviceAccountKey)
+    console.log('Credenciais parseadas com sucesso, client_email:', credentials.client_email)
     
     // Criar JWT para autenticação
     const header = {
@@ -70,19 +72,28 @@ async function getAccessToken(serviceAccountKey: string) {
       iat: now
     }
     
+    console.log('Criando JWT...')
+    
     // Assinar JWT (implementação simplificada usando Web Crypto API)
     const encoder = new TextEncoder()
     const headerB64 = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
     const payloadB64 = btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
     
     // Importar private key
+    const privateKeyPem = credentials.private_key.replace(/\\n/g, '\n')
+    console.log('Importando private key...')
+    
+    const privateKeyDer = pemToDer(privateKeyPem)
+    
     const privateKey = await crypto.subtle.importKey(
       'pkcs8',
-      new TextEncoder().encode(credentials.private_key.replace(/\\n/g, '\n')),
+      privateKeyDer,
       { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
       false,
       ['sign']
     )
+    
+    console.log('Private key importada com sucesso')
     
     // Assinar
     const signatureBuffer = await crypto.subtle.sign(
@@ -95,6 +106,8 @@ async function getAccessToken(serviceAccountKey: string) {
       .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
     
     const jwt = `${headerB64}.${payloadB64}.${signatureB64}`
+    
+    console.log('JWT criado, fazendo requisição para token...')
     
     // Trocar JWT por access token
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -113,12 +126,29 @@ async function getAccessToken(serviceAccountKey: string) {
     }
     
     const tokenData = await tokenResponse.json()
+    console.log('Access token obtido com sucesso')
     return tokenData.access_token
     
   } catch (error) {
     console.error('Erro ao processar service account:', error)
-    throw new Error('Erro ao processar credenciais do service account')
+    throw new Error(`Erro ao processar credenciais do service account: ${error.message}`)
   }
+}
+
+function pemToDer(pem: string): ArrayBuffer {
+  // Remove header, footer e quebras de linha
+  const b64 = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\s/g, '')
+  
+  // Decodifica base64 para bytes
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes.buffer
 }
 
 async function createCompleteDashboard(transactions: any[], accessToken: string) {

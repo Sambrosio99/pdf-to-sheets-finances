@@ -16,7 +16,7 @@ import { useNavigate } from "react-router-dom";
 
 const Index = () => {
   const { user, signOut, loading: authLoading } = useAuth();
-  const { transactions, loading, addTransaction, updateTransaction, deleteTransaction } = useTransactions();
+  const { transactions, loading, addTransaction, addMultipleTransactions, updateTransaction, deleteTransaction } = useTransactions();
   const navigate = useNavigate();
 
   if (authLoading) {
@@ -141,7 +141,7 @@ const Index = () => {
 
           <TabsContent value="upload" className="space-y-6">
             <FileUploader onDataExtracted={(data) => {
-              data.forEach(transaction => addTransaction(transaction));
+              addMultipleTransactions(data);
             }} />
           </TabsContent>
         </Tabs>

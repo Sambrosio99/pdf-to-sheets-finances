@@ -15,38 +15,35 @@ serve(async (req) => {
   try {
     const { transactions } = await req.json()
     
-    // Get Google Sheets credentials from Supabase secrets
-    const GOOGLE_CLIENT_ID = Deno.env.get('ID_DO_CLIENTE_DO_GOOGLE')
-    
-    if (!GOOGLE_CLIENT_ID) {
-      throw new Error('Google Sheets credentials not configured')
-    }
-
-    // For now, return a mock response since we need to set up OAuth flow
-    // In a real implementation, this would:
-    // 1. Use OAuth to authenticate with Google
-    // 2. Create a new spreadsheet
-    // 3. Format the data and add it to sheets
-    // 4. Return the spreadsheet URL
-
     console.log('Exporting transactions:', transactions?.length || 0)
     
-    // Mock response - in production this would be the actual Google Sheets URL
-    const mockSpreadsheetUrl = `https://docs.google.com/spreadsheets/d/mock-sheet-id/edit`
-    
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        spreadsheetUrl: mockSpreadsheetUrl,
-        message: 'Export functionality will be completed after Google OAuth setup'
-      }),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
-      }
-    )
+    // Criar dados formatados para a planilha
+    const csvData = [
+      ['Data', 'Descrição', 'Categoria', 'Método de Pagamento', 'Valor', 'Tipo', 'Status'],
+      ...transactions.map((t: any) => [
+        new Date(t.date).toLocaleDateString('pt-BR'),
+        t.description,
+        t.category,
+        t.paymentMethod,
+        t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        t.type === 'income' ? 'Receita' : 'Despesa',
+        t.status === 'paid' ? 'Pago' : 'Pendente'
+      ])
+    ];
+
+    // Converter para CSV
+    const csvContent = csvData.map(row => 
+      row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
+
+    // Retornar o CSV diretamente para download
+    return new Response(csvContent, {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="transacoes_financeiras.csv"',
+      },
+    });
 
   } catch (error) {
     console.error('Export error:', error)

@@ -153,76 +153,6 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     });
   };
 
-  // Função melhorada para formatar data
-  const formatDate = (dateStr: string): string => {
-    console.log("Formatando data:", dateStr);
-    
-    // Remover espaços e caracteres especiais
-    const cleanDate = dateStr.trim();
-    
-    // Tentar diferentes formatos de data
-    const formats = [
-      /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,     // DD/MM/YYYY
-      /^(\d{1,2})-(\d{1,2})-(\d{4})$/,      // DD-MM-YYYY  
-      /^(\d{4})-(\d{1,2})-(\d{1,2})$/,      // YYYY-MM-DD
-      /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/,    // YYYY/MM/DD
-      /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/,    // DD.MM.YYYY
-    ];
-    
-    for (let i = 0; i < formats.length; i++) {
-      const format = formats[i];
-      const match = cleanDate.match(format);
-      if (match) {
-        let formattedDate;
-        if (i === 2 || i === 3) { // YYYY-MM-DD ou YYYY/MM/DD
-          formattedDate = `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
-        } else { // DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
-          formattedDate = `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
-        }
-        console.log(`Data formatada: ${cleanDate} -> ${formattedDate}`);
-        return formattedDate;
-      }
-    }
-    
-    // Se não conseguir parsear, usar data atual
-    const today = new Date().toISOString().split('T')[0];
-    console.log(`Data não reconhecida: ${cleanDate}, usando: ${today}`);
-    return today;
-  };
-
-  // Função simulada para extrair dados do PDF
-  const extractDataFromPDF = async (file: File): Promise<Omit<Transaction, 'id'>[]> => {
-    console.log("Processando arquivo PDF:", file.name);
-    
-    // Simular processamento
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Dados simulados
-    const today = new Date();
-    const mockTransactions: Omit<Transaction, 'id'>[] = [
-      {
-        date: today.toISOString().split('T')[0],
-        description: `Compra Supermercado - Extrato ${file.name.substring(0, 10)}`,
-        category: 'Alimentação',
-        paymentMethod: 'Cartão de Débito',
-        amount: 89.50,
-        type: 'expense',
-        status: 'paid'
-      },
-      {
-        date: new Date(today.getTime() - 86400000).toISOString().split('T')[0],
-        description: `Posto de Gasolina - ${file.name.substring(0, 8)}`,
-        category: 'Transporte',
-        paymentMethod: 'Cartão de Crédito',
-        amount: 120.00,
-        type: 'expense',
-        status: 'paid'
-      }
-    ];
-    
-    return mockTransactions;
-  };
-
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     console.log("Evento de upload disparado");
     const files = event.target.files;
@@ -310,30 +240,6 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
       if (event.target) {
         event.target.value = '';
       }
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      console.log("Arquivos arrastados:", files.length);
-      const inputElement = document.createElement('input');
-      inputElement.type = 'file';
-      inputElement.files = files;
-      
-      const syntheticEvent = {
-        target: inputElement
-      } as React.ChangeEvent<HTMLInputElement>;
-      
-      handleFileUpload(syntheticEvent);
     }
   };
 

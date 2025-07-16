@@ -31,7 +31,7 @@ export const useTransactions = () => {
         description: item.description,
         category: item.category,
         paymentMethod: item.payment_method,
-        amount: parseFloat(item.amount),
+        amount: parseFloat(item.amount.toString()), // Corrigido: converter para string primeiro
         type: item.type as 'income' | 'expense',
         status: item.status as 'paid' | 'pending'
       }));
@@ -67,6 +67,33 @@ export const useTransactions = () => {
     } catch (error) {
       console.error('Error adding transaction:', error);
       toast.error('Erro ao adicionar transação');
+    }
+  };
+
+  const addMultipleTransactions = async (transactionList: Omit<Transaction, 'id'>[]) => {
+    try {
+      const transactionsToInsert = transactionList.map(transaction => ({
+        user_id: user?.id,
+        date: transaction.date,
+        description: transaction.description,
+        category: transaction.category,
+        payment_method: transaction.paymentMethod,
+        amount: transaction.amount,
+        type: transaction.type,
+        status: transaction.status
+      }));
+
+      const { error } = await supabase
+        .from('transactions')
+        .insert(transactionsToInsert);
+
+      if (error) throw error;
+
+      await fetchTransactions();
+      toast.success(`${transactionList.length} transações adicionadas com sucesso!`);
+    } catch (error) {
+      console.error('Error adding multiple transactions:', error);
+      toast.error('Erro ao adicionar transações em lote');
     }
   };
 
@@ -116,6 +143,7 @@ export const useTransactions = () => {
     transactions,
     loading,
     addTransaction,
+    addMultipleTransactions,
     updateTransaction,
     deleteTransaction,
     refetch: fetchTransactions

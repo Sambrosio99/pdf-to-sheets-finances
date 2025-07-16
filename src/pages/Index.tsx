@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import { LogOut, Wallet } from "lucide-react";
 import { Loader2 } from "lucide-react";
 
 export default function Index() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const { transactions, loading, addTransaction, addMultipleTransactions, updateTransaction, deleteTransaction } = useTransactions();
 
   const [isAddingTransaction, setIsAddingTransaction] = useState(false);
@@ -59,7 +60,7 @@ export default function Index() {
               <Wallet className="h-6 w-6 mr-2 text-green-500" />
               Painel Financeiro
             </CardTitle>
-            <Button onClick={() => window.location.href = '/auth'} variant="outline">
+            <Button onClick={signOut} variant="outline">
               <LogOut className="h-4 w-4 mr-2" />
               Sair
             </Button>
@@ -112,14 +113,12 @@ export default function Index() {
                     await addTransaction(transaction);
                     setIsAddingTransaction(false);
                   }}
-                  loading={isAddingTransaction}
                 />
               </CardContent>
             </Card>
 
             <TransactionList
               transactions={transactions}
-              loading={loading}
               updateTransaction={updateTransaction}
               deleteTransaction={deleteTransaction}
             />
@@ -139,12 +138,11 @@ export default function Index() {
               </CardHeader>
               <CardContent>
                 <FileUploader
-                  onUpload={async (transactions) => {
+                  onFileUpload={async (transactions) => {
                     setIsUploading(true);
                     await addMultipleTransactions(transactions);
                     setIsUploading(false);
                   }}
-                  loading={isUploading}
                 />
               </CardContent>
             </Card>

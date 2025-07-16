@@ -1,5 +1,5 @@
 
-import { AuthPage } from "@/pages/Auth";
+import AuthPage from "@/pages/Auth";
 import Index from "@/pages/Index";
 import GoogleSheetsExport from "@/pages/GoogleSheetsExport";
 import NotFound from "@/pages/NotFound";

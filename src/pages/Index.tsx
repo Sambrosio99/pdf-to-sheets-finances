@@ -119,8 +119,8 @@ export default function Index() {
 
             <TransactionList
               transactions={transactions}
-              updateTransaction={updateTransaction}
-              deleteTransaction={deleteTransaction}
+              onUpdate={updateTransaction}
+              onDelete={deleteTransaction}
             />
           </TabsContent>
 
@@ -138,7 +138,7 @@ export default function Index() {
               </CardHeader>
               <CardContent>
                 <FileUploader
-                  onFileUpload={async (transactions) => {
+                  onUpload={async (transactions) => {
                     setIsUploading(true);
                     await addMultipleTransactions(transactions);
                     setIsUploading(false);

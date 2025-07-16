@@ -16,20 +16,25 @@ serve(async (req) => {
     // Pegar as credenciais do service account - usando o nome correto do segredo
     const serviceAccountKey = Deno.env.get('CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE')
     
-    console.log('Verificando Service Account...', {
-      'CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE': !!serviceAccountKey,
-      'Tamanho da chave': serviceAccountKey ? serviceAccountKey.length : 0
-    })
+    console.log('=== DEBUG: Verificando Service Account ===')
+    console.log('Chave existe:', !!serviceAccountKey)
+    console.log('Tamanho da chave:', serviceAccountKey ? serviceAccountKey.length : 0)
+    
+    if (serviceAccountKey) {
+      console.log('Primeiros 50 caracteres:', serviceAccountKey.substring(0, 50))
+      console.log('Últimos 50 caracteres:', serviceAccountKey.substring(serviceAccountKey.length - 50))
+    }
     
     if (!serviceAccountKey) {
-      console.error('Google Service Account key não encontrada. Configure CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE no Supabase.')
+      console.error('❌ ERRO: Google Service Account key não encontrada')
       throw new Error('Google Service Account key not configured. Please add CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE to your Supabase secrets.')
     }
 
-    console.log(`Google Sheets Integration - Action: ${action}`)
+    console.log(`✅ Google Sheets Integration - Action: ${action}`)
 
     // Obter access token do service account
     const accessToken = await getAccessToken(serviceAccountKey)
+    console.log('✅ Access token obtido, iniciando operação...')
 
     if (action === 'create_complete_dashboard') {
       return await createCompleteDashboard(transactions, accessToken)
@@ -40,9 +45,13 @@ serve(async (req) => {
     throw new Error('Invalid action')
 
   } catch (error) {
-    console.error('Google Sheets Integration error:', error)
+    console.error('❌ Google Sheets Integration error:', error)
+    console.error('Stack trace:', error.stack)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: error.stack 
+      }),
       { 
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -53,9 +62,25 @@ serve(async (req) => {
 
 async function getAccessToken(serviceAccountKey: string) {
   try {
-    console.log('Iniciando processo de autenticação...')
-    const credentials = JSON.parse(serviceAccountKey)
-    console.log('Credenciais parseadas com sucesso, client_email:', credentials.client_email)
+    console.log('🔐 Iniciando processo de autenticação...')
+    
+    // Verificar se o JSON é válido
+    let credentials
+    try {
+      credentials = JSON.parse(serviceAccountKey)
+      console.log('✅ JSON parseado com sucesso')
+      console.log('Client email:', credentials.client_email)
+      console.log('Project ID:', credentials.project_id)
+      console.log('Private key existe:', !!credentials.private_key)
+    } catch (parseError) {
+      console.error('❌ Erro ao fazer parse do JSON:', parseError)
+      throw new Error(`JSON inválido: ${parseError.message}`)
+    }
+    
+    // Verificar campos obrigatórios
+    if (!credentials.client_email || !credentials.private_key) {
+      throw new Error('Campos obrigatórios ausentes no JSON (client_email ou private_key)')
+    }
     
     // Criar JWT para autenticação
     const header = {
@@ -72,7 +97,7 @@ async function getAccessToken(serviceAccountKey: string) {
       iat: now
     }
     
-    console.log('Criando JWT...')
+    console.log('🔧 Criando JWT...')
     
     // Assinar JWT (implementação simplificada usando Web Crypto API)
     const encoder = new TextEncoder()
@@ -81,7 +106,8 @@ async function getAccessToken(serviceAccountKey: string) {
     
     // Importar private key
     const privateKeyPem = credentials.private_key.replace(/\\n/g, '\n')
-    console.log('Importando private key...')
+    console.log('🔑 Importando private key...')
+    console.log('Private key primeiros 50 chars:', privateKeyPem.substring(0, 50))
     
     const privateKeyDer = pemToDer(privateKeyPem)
     
@@ -93,7 +119,7 @@ async function getAccessToken(serviceAccountKey: string) {
       ['sign']
     )
     
-    console.log('Private key importada com sucesso')
+    console.log('✅ Private key importada com sucesso')
     
     // Assinar
     const signatureBuffer = await crypto.subtle.sign(
@@ -107,7 +133,7 @@ async function getAccessToken(serviceAccountKey: string) {
     
     const jwt = `${headerB64}.${payloadB64}.${signatureB64}`
     
-    console.log('JWT criado, fazendo requisição para token...')
+    console.log('🌐 JWT criado, fazendo requisição para token...')
     
     // Trocar JWT por access token
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -119,39 +145,54 @@ async function getAccessToken(serviceAccountKey: string) {
       })
     })
     
+    console.log('Token response status:', tokenResponse.status)
+    
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
-      console.error('Erro ao obter access token:', errorText)
-      throw new Error(`Erro na autenticação: ${errorText}`)
+      console.error('❌ Erro na resposta do token:', errorText)
+      throw new Error(`Erro na autenticação Google: ${tokenResponse.status} - ${errorText}`)
     }
     
     const tokenData = await tokenResponse.json()
-    console.log('Access token obtido com sucesso')
+    console.log('✅ Access token obtido com sucesso')
     return tokenData.access_token
     
   } catch (error) {
-    console.error('Erro ao processar service account:', error)
+    console.error('❌ Erro ao processar service account:', error)
     throw new Error(`Erro ao processar credenciais do service account: ${error.message}`)
   }
 }
 
 function pemToDer(pem: string): ArrayBuffer {
-  // Remove header, footer e quebras de linha
-  const b64 = pem
-    .replace(/-----BEGIN PRIVATE KEY-----/, '')
-    .replace(/-----END PRIVATE KEY-----/, '')
-    .replace(/\s/g, '')
-  
-  // Decodifica base64 para bytes
-  const binary = atob(b64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i)
+  try {
+    // Remove header, footer e quebras de linha
+    const b64 = pem
+      .replace(/-----BEGIN PRIVATE KEY-----/, '')
+      .replace(/-----END PRIVATE KEY-----/, '')
+      .replace(/\s/g, '')
+    
+    if (!b64) {
+      throw new Error('Private key base64 está vazia após limpeza')
+    }
+    
+    // Decodifica base64 para bytes
+    const binary = atob(b64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i)
+    }
+    console.log('✅ Private key convertida para DER, tamanho:', bytes.length)
+    return bytes.buffer
+  } catch (error) {
+    console.error('❌ Erro na conversão PEM para DER:', error)
+    throw new Error(`Erro na conversão da private key: ${error.message}`)
   }
-  return bytes.buffer
 }
 
 async function createCompleteDashboard(transactions: any[], accessToken: string) {
+  console.log('📊 Criando dashboard completo...')
+  console.log('Número de transações:', transactions.length)
+  
   // Criar uma nova planilha com estrutura completa
   const createResponse = await fetch(
     'https://sheets.googleapis.com/v4/spreadsheets',
@@ -180,14 +221,17 @@ async function createCompleteDashboard(transactions: any[], accessToken: string)
     }
   )
 
+  console.log('Create response status:', createResponse.status)
+
   if (!createResponse.ok) {
     const errorText = await createResponse.text()
-    console.error('Erro ao criar planilha:', errorText)
+    console.error('❌ Erro ao criar planilha:', errorText)
     throw new Error(`Erro ao criar planilha no Google Sheets: ${errorText}`)
   }
 
   const newSheet = await createResponse.json()
   const spreadsheetId = newSheet.spreadsheetId
+  console.log('✅ Planilha criada com ID:', spreadsheetId)
 
   // Estruturar dados para inserção
   const sheetData = prepareSheetData(transactions)

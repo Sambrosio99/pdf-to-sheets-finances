@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const corsHeaders = {
@@ -13,28 +14,27 @@ serve(async (req) => {
   try {
     const { action, transactions, sheetsId } = await req.json()
     
-    // Tentar pegar a API key com diferentes nomes possíveis
-    const apiKey = Deno.env.get('CHAVE_API_DO_GOOGLE_SHEETS') || 
-                   Deno.env.get('GOOGLE_SHEETS_API_KEY') ||
-                   Deno.env.get('GOOGLE_API_KEY')
+    // Pegar as credenciais do service account
+    const serviceAccountKey = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_KEY')
     
-    console.log('Tentando buscar API key...', {
-      'CHAVE_API_DO_GOOGLE_SHEETS': !!Deno.env.get('CHAVE_API_DO_GOOGLE_SHEETS'),
-      'GOOGLE_SHEETS_API_KEY': !!Deno.env.get('GOOGLE_SHEETS_API_KEY'),
-      'GOOGLE_API_KEY': !!Deno.env.get('GOOGLE_API_KEY')
+    console.log('Verificando Service Account...', {
+      'GOOGLE_SERVICE_ACCOUNT_KEY': !!serviceAccountKey
     })
     
-    if (!apiKey) {
-      console.error('Nenhuma API key encontrada. Verifique se a secret está configurada no Supabase.')
-      throw new Error('Google Sheets API key not configured. Please check your Supabase secrets.')
+    if (!serviceAccountKey) {
+      console.error('Google Service Account key não encontrada. Configure GOOGLE_SERVICE_ACCOUNT_KEY no Supabase.')
+      throw new Error('Google Service Account key not configured. Please add GOOGLE_SERVICE_ACCOUNT_KEY to your Supabase secrets.')
     }
 
     console.log(`Google Sheets Integration - Action: ${action}`)
 
+    // Obter access token do service account
+    const accessToken = await getAccessToken(serviceAccountKey)
+
     if (action === 'create_complete_dashboard') {
-      return await createCompleteDashboard(transactions, apiKey)
+      return await createCompleteDashboard(transactions, accessToken)
     } else if (action === 'update_sheets') {
-      return await updateExistingSheets(transactions, sheetsId, apiKey)
+      return await updateExistingSheets(transactions, sheetsId, accessToken)
     }
 
     throw new Error('Invalid action')
@@ -51,13 +51,86 @@ serve(async (req) => {
   }
 })
 
-async function createCompleteDashboard(transactions: any[], apiKey: string) {
+async function getAccessToken(serviceAccountKey: string) {
+  try {
+    const credentials = JSON.parse(serviceAccountKey)
+    
+    // Criar JWT para autenticação
+    const header = {
+      alg: 'RS256',
+      typ: 'JWT'
+    }
+    
+    const now = Math.floor(Date.now() / 1000)
+    const payload = {
+      iss: credentials.client_email,
+      scope: 'https://www.googleapis.com/auth/spreadsheets',
+      aud: 'https://oauth2.googleapis.com/token',
+      exp: now + 3600,
+      iat: now
+    }
+    
+    // Assinar JWT (implementação simplificada usando Web Crypto API)
+    const encoder = new TextEncoder()
+    const headerB64 = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+    const payloadB64 = btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+    
+    // Importar private key
+    const privateKey = await crypto.subtle.importKey(
+      'pkcs8',
+      new TextEncoder().encode(credentials.private_key.replace(/\\n/g, '\n')),
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      false,
+      ['sign']
+    )
+    
+    // Assinar
+    const signatureBuffer = await crypto.subtle.sign(
+      'RSASSA-PKCS1-v1_5',
+      privateKey,
+      encoder.encode(`${headerB64}.${payloadB64}`)
+    )
+    
+    const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
+      .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+    
+    const jwt = `${headerB64}.${payloadB64}.${signatureB64}`
+    
+    // Trocar JWT por access token
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: jwt
+      })
+    })
+    
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text()
+      console.error('Erro ao obter access token:', errorText)
+      throw new Error(`Erro na autenticação: ${errorText}`)
+    }
+    
+    const tokenData = await tokenResponse.json()
+    return tokenData.access_token
+    
+  } catch (error) {
+    console.error('Erro ao processar service account:', error)
+    throw new Error('Erro ao processar credenciais do service account')
+  }
+}
+
+async function createCompleteDashboard(transactions: any[], accessToken: string) {
   // Criar uma nova planilha com estrutura completa
   const createResponse = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets?key=${apiKey}`,
+    'https://sheets.googleapis.com/v4/spreadsheets',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
       body: JSON.stringify({
         properties: {
           title: `Dashboard Financeiro - ${new Date().toLocaleDateString('pt-BR')}`,
@@ -90,10 +163,10 @@ async function createCompleteDashboard(transactions: any[], apiKey: string) {
   const sheetData = prepareSheetData(transactions)
   
   // Inserir dados em todas as abas
-  await insertDataToSheets(spreadsheetId, sheetData, apiKey)
+  await insertDataToSheets(spreadsheetId, sheetData, accessToken)
   
   // Criar gráficos e formatação
-  await createChartsAndFormatting(spreadsheetId, apiKey)
+  await createChartsAndFormatting(spreadsheetId, accessToken)
 
   return new Response(
     JSON.stringify({ 
@@ -183,7 +256,7 @@ function prepareSheetData(transactions: any[]) {
   }
 }
 
-async function insertDataToSheets(spreadsheetId: string, sheetData: any, apiKey: string) {
+async function insertDataToSheets(spreadsheetId: string, sheetData: any, accessToken: string) {
   const requests = [
     {
       range: 'Transações!A1',
@@ -201,10 +274,13 @@ async function insertDataToSheets(spreadsheetId: string, sheetData: any, apiKey:
 
   for (const request of requests) {
     const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${request.range}?valueInputOption=USER_ENTERED&key=${apiKey}`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${request.range}?valueInputOption=USER_ENTERED`,
       {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
         body: JSON.stringify({
           values: request.values
         })
@@ -219,7 +295,7 @@ async function insertDataToSheets(spreadsheetId: string, sheetData: any, apiKey:
   }
 }
 
-async function createChartsAndFormatting(spreadsheetId: string, apiKey: string) {
+async function createChartsAndFormatting(spreadsheetId: string, accessToken: string) {
   // Criar gráficos e formatação avançada
   const requests = [
     // Formatação do cabeçalho
@@ -240,74 +316,40 @@ async function createChartsAndFormatting(spreadsheetId: string, apiKey: string) 
         },
         fields: 'userEnteredFormat'
       }
-    },
-    // Gráfico de pizza para gastos por categoria
-    {
-      addChart: {
-        chart: {
-          spec: {
-            title: 'Gastos por Categoria',
-            pieChart: {
-              domain: {
-                sourceRange: {
-                  sources: [{
-                    sheetId: 1,
-                    startRowIndex: 1,
-                    endRowIndex: 20,
-                    startColumnIndex: 2,
-                    endColumnIndex: 3
-                  }]
-                }
-              },
-              series: {
-                sourceRange: {
-                  sources: [{
-                    sheetId: 1,
-                    startRowIndex: 1,
-                    endRowIndex: 20,
-                    startColumnIndex: 4,
-                    endColumnIndex: 5
-                  }]
-                }
-              }
-            }
-          },
-          position: {
-            overlayPosition: {
-              anchorCell: { sheetId: 0, rowIndex: 25, columnIndex: 0 }
-            }
-          }
-        }
-      }
     }
   ]
 
   const response = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate?key=${apiKey}`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
       body: JSON.stringify({ requests })
     }
   )
   
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('Erro ao criar gráficos:', errorText)
-    // Não falhar por causa dos gráficos, só logar o erro
+    console.error('Erro ao criar formatação:', errorText)
+    // Não falhar por causa da formatação, só logar o erro
   }
 }
 
-async function updateExistingSheets(transactions: any[], sheetsId: string, apiKey: string) {
+async function updateExistingSheets(transactions: any[], sheetsId: string, accessToken: string) {
   const sheetData = prepareSheetData(transactions)
   
   // Limpar dados existentes
   const clearResponse = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetsId}/values/Transações!A1:clear?key=${apiKey}`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetsId}/values/Transações!A1:Z1000:clear`,
     { 
       method: 'POST', 
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      }
     }
   )
 
@@ -319,10 +361,13 @@ async function updateExistingSheets(transactions: any[], sheetsId: string, apiKe
 
   // Inserir novos dados
   const updateResponse = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetsId}/values/Transações!A1?valueInputOption=USER_ENTERED&key=${apiKey}`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetsId}/values/Transações!A1?valueInputOption=USER_ENTERED`,
     {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
       body: JSON.stringify({ values: sheetData.transactions })
     }
   )

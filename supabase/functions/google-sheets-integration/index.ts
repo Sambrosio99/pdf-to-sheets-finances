@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const corsHeaders = {
@@ -13,10 +12,21 @@ serve(async (req) => {
 
   try {
     const { action, transactions, sheetsId } = await req.json()
-    const apiKey = Deno.env.get('GOOGLE_SHEETS_API_KEY')
+    
+    // Tentar pegar a API key com diferentes nomes possíveis
+    const apiKey = Deno.env.get('CHAVE_API_DO_GOOGLE_SHEETS') || 
+                   Deno.env.get('GOOGLE_SHEETS_API_KEY') ||
+                   Deno.env.get('GOOGLE_API_KEY')
+    
+    console.log('Tentando buscar API key...', {
+      'CHAVE_API_DO_GOOGLE_SHEETS': !!Deno.env.get('CHAVE_API_DO_GOOGLE_SHEETS'),
+      'GOOGLE_SHEETS_API_KEY': !!Deno.env.get('GOOGLE_SHEETS_API_KEY'),
+      'GOOGLE_API_KEY': !!Deno.env.get('GOOGLE_API_KEY')
+    })
     
     if (!apiKey) {
-      throw new Error('Google Sheets API key not configured')
+      console.error('Nenhuma API key encontrada. Verifique se a secret está configurada no Supabase.')
+      throw new Error('Google Sheets API key not configured. Please check your Supabase secrets.')
     }
 
     console.log(`Google Sheets Integration - Action: ${action}`)
@@ -68,7 +78,9 @@ async function createCompleteDashboard(transactions: any[], apiKey: string) {
   )
 
   if (!createResponse.ok) {
-    throw new Error('Erro ao criar planilha no Google Sheets')
+    const errorText = await createResponse.text()
+    console.error('Erro ao criar planilha:', errorText)
+    throw new Error(`Erro ao criar planilha no Google Sheets: ${errorText}`)
   }
 
   const newSheet = await createResponse.json()
@@ -188,7 +200,7 @@ async function insertDataToSheets(spreadsheetId: string, sheetData: any, apiKey:
   ]
 
   for (const request of requests) {
-    await fetch(
+    const response = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${request.range}?valueInputOption=USER_ENTERED&key=${apiKey}`,
       {
         method: 'PUT',
@@ -198,6 +210,12 @@ async function insertDataToSheets(spreadsheetId: string, sheetData: any, apiKey:
         })
       }
     )
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`Erro ao inserir dados na aba ${request.range}:`, errorText)
+      throw new Error(`Erro ao inserir dados: ${errorText}`)
+    }
   }
 }
 
@@ -264,7 +282,7 @@ async function createChartsAndFormatting(spreadsheetId: string, apiKey: string) 
     }
   ]
 
-  await fetch(
+  const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate?key=${apiKey}`,
     {
       method: 'POST',
@@ -272,18 +290,35 @@ async function createChartsAndFormatting(spreadsheetId: string, apiKey: string) 
       body: JSON.stringify({ requests })
     }
   )
+  
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('Erro ao criar gráficos:', errorText)
+    // Não falhar por causa dos gráficos, só logar o erro
+  }
 }
 
 async function updateExistingSheets(transactions: any[], sheetsId: string, apiKey: string) {
   const sheetData = prepareSheetData(transactions)
   
-  // Atualizar apenas os dados das transações
-  await fetch(
+  // Limpar dados existentes
+  const clearResponse = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetsId}/values/Transações!A1:clear?key=${apiKey}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+    { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    }
   )
 
-  await fetch(
+  if (!clearResponse.ok) {
+    const errorText = await clearResponse.text()
+    console.error('Erro ao limpar dados:', errorText)
+    throw new Error(`Erro ao limpar dados existentes: ${errorText}`)
+  }
+
+  // Inserir novos dados
+  const updateResponse = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${sheetsId}/values/Transações!A1?valueInputOption=USER_ENTERED&key=${apiKey}`,
     {
       method: 'PUT',
@@ -291,6 +326,12 @@ async function updateExistingSheets(transactions: any[], sheetsId: string, apiKe
       body: JSON.stringify({ values: sheetData.transactions })
     }
   )
+
+  if (!updateResponse.ok) {
+    const errorText = await updateResponse.text()
+    console.error('Erro ao atualizar dados:', errorText)
+    throw new Error(`Erro ao atualizar dados: ${errorText}`)
+  }
 
   return new Response(
     JSON.stringify({ 

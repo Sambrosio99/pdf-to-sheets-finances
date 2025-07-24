@@ -13,32 +13,39 @@ serve(async (req) => {
   try {
     const { action, transactions, sheetsId } = await req.json()
     
+    console.log('🚀 Função iniciada com action:', action)
+    console.log('📊 Número de transações:', transactions?.length || 0)
+    
     // Pegar as credenciais do service account - usando o nome correto do segredo
     const serviceAccountKey = Deno.env.get('CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE')
     
-    console.log('=== DEBUG: Verificando Service Account ===')
+    console.log('=== DEBUG COMPLETO ===')
     console.log('Chave existe:', !!serviceAccountKey)
     console.log('Tamanho da chave:', serviceAccountKey ? serviceAccountKey.length : 0)
     
-    if (serviceAccountKey) {
-      console.log('Primeiros 50 caracteres:', serviceAccountKey.substring(0, 50))
-      console.log('Últimos 50 caracteres:', serviceAccountKey.substring(serviceAccountKey.length - 50))
-      
-      // Verificar se é um JSON válido
-      try {
-        const testParse = JSON.parse(serviceAccountKey)
-        console.log('✅ JSON é válido')
-        console.log('Client email:', testParse.client_email)
-        console.log('Project ID:', testParse.project_id)
-        console.log('Type:', testParse.type)
-      } catch (e) {
-        console.log('❌ JSON inválido:', e.message)
-      }
+    if (!serviceAccountKey) {
+      console.error('❌ ERRO CRÍTICO: CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE não encontrada')
+      console.error('❌ Variáveis de ambiente disponíveis:', Object.keys(Deno.env.toObject()))
+      throw new Error('Google Service Account key not configured. Please add CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE to your Supabase secrets.')
     }
     
-    if (!serviceAccountKey) {
-      console.error('❌ ERRO: Google Service Account key não encontrada')
-      throw new Error('Google Service Account key not configured. Please add CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE to your Supabase secrets.')
+    console.log('✅ Chave encontrada! Tamanho:', serviceAccountKey.length, 'caracteres')
+    console.log('Primeiros 100 caracteres:', serviceAccountKey.substring(0, 100))
+    
+    // Tentar fazer parse do JSON
+    let credentials
+    try {
+      credentials = JSON.parse(serviceAccountKey)
+      console.log('✅ JSON parseado com sucesso!')
+      console.log('Client email:', credentials.client_email)
+      console.log('Project ID:', credentials.project_id)
+      console.log('Type:', credentials.type)
+      console.log('Private key existe:', !!credentials.private_key)
+      console.log('Private key length:', credentials.private_key ? credentials.private_key.length : 0)
+    } catch (parseError) {
+      console.error('❌ ERRO NO PARSE DO JSON:', parseError.message)
+      console.error('❌ Conteúdo da chave (primeiros 200 chars):', serviceAccountKey.substring(0, 200))
+      throw new Error(`JSON da chave do service account é inválido: ${parseError.message}`)
     }
 
     console.log(`✅ Google Sheets Integration - Action: ${action}`)

@@ -81,53 +81,63 @@ serve(async (req) => {
 async function createWorksheetTabs(accessToken: string, spreadsheetId: string) {
   console.log('📋 Criando abas do dashboard...')
   
-  const requests = [
-    // Aba Dashboard
-    {
-      addSheet: {
-        properties: {
-          title: "📊 Dashboard",
-          gridProperties: { rowCount: 100, columnCount: 26 }
+  try {
+    const requests = [
+      // Aba Dashboard
+      {
+        addSheet: {
+          properties: {
+            title: "📊 Dashboard",
+            gridProperties: { rowCount: 100, columnCount: 26 }
+          }
+        }
+      },
+      // Aba Transações
+      {
+        addSheet: {
+          properties: {
+            title: "💰 Transações",
+            gridProperties: { rowCount: 1000, columnCount: 10 }
+          }
+        }
+      },
+      // Aba Categorias
+      {
+        addSheet: {
+          properties: {
+            title: "📈 Por Categoria",
+            gridProperties: { rowCount: 50, columnCount: 15 }
+          }
+        }
+      },
+      // Aba Evolução
+      {
+        addSheet: {
+          properties: {
+            title: "📅 Evolução Mensal",
+            gridProperties: { rowCount: 50, columnCount: 15 }
+          }
         }
       }
-    },
-    // Aba Transações
-    {
-      addSheet: {
-        properties: {
-          title: "💰 Transações",
-          gridProperties: { rowCount: 1000, columnCount: 10 }
-        }
-      }
-    },
-    // Aba Categorias
-    {
-      addSheet: {
-        properties: {
-          title: "📈 Por Categoria",
-          gridProperties: { rowCount: 50, columnCount: 15 }
-        }
-      }
-    },
-    // Aba Evolução
-    {
-      addSheet: {
-        properties: {
-          title: "📅 Evolução Mensal",
-          gridProperties: { rowCount: 50, columnCount: 15 }
-        }
-      }
-    }
-  ]
+    ]
 
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`
-    },
-    body: JSON.stringify({ requests })
-  })
+    const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ requests })
+    })
+    
+    if (!response.ok) {
+      console.log('⚠️ Algumas abas podem já existir, continuando...')
+    } else {
+      console.log('✅ Abas criadas com sucesso!')
+    }
+  } catch (error) {
+    console.log('⚠️ Erro ao criar abas (pode ser que já existam):', error.message)
+  }
 }
 
 // Função para adicionar dados das transações

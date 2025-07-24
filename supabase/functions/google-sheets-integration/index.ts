@@ -32,7 +32,7 @@ serve(async (req) => {
     // ID da planilha existente do usuário
     const existingSheetId = '1z5KpIdcw4vJfUN_7iMnNCyNYvWM2s-G1Tnx_5CHzAds'
     
-    console.log('🚀 Iniciando criação do dashboard completo...')
+    console.log('🚀 Iniciando criação do dashboard completo automatizado...')
     
     // 1. Limpar planilha primeiro
     console.log('🧹 Passo 1: Limpando planilha...')
@@ -44,30 +44,35 @@ serve(async (req) => {
     const sheetIds = await createWorksheetTabs(accessToken, existingSheetId)
     console.log('✅ Abas criadas! IDs:', sheetIds)
     
-    // 3. Adicionar dados das transações
-    console.log('💰 Passo 3: Adicionando transações...')
-    await addTransactionsData(accessToken, existingSheetId, transactions, sheetIds.transactionsId)
-    console.log('✅ Transações adicionadas!')
+    // 3. Criar Dashboard Principal Automatizado
+    console.log('🎯 Passo 3: Criando Dashboard Principal...')
+    await createMainDashboard(accessToken, existingSheetId, transactions, sheetIds.dashboardId)
+    console.log('✅ Dashboard principal criado!')
     
-    // 4. Adicionar resumo financeiro
-    console.log('📊 Passo 4: Criando resumo financeiro...')
-    await addFinancialSummary(accessToken, existingSheetId, transactions, sheetIds.dashboardId)
-    console.log('✅ Resumo financeiro criado!')
+    // 4. Adicionar dados das transações com formatação
+    console.log('💰 Passo 4: Adicionando transações formatadas...')
+    await addFormattedTransactionsData(accessToken, existingSheetId, transactions, sheetIds.transactionsId)
+    console.log('✅ Transações formatadas adicionadas!')
     
-    // 5. Adicionar análise por categorias
+    // 5. Criar análise por categorias com gráficos
     console.log('📈 Passo 5: Criando análise por categorias...')
-    await addCategoryAnalysis(accessToken, existingSheetId, transactions, sheetIds.categoryId)
-    console.log('✅ Análise por categorias criada!')
+    await createCategoryAnalysisWithCharts(accessToken, existingSheetId, transactions, sheetIds.categoryId)
+    console.log('✅ Análise por categorias com gráficos criada!')
     
-    // 6. Adicionar evolução mensal
+    // 6. Criar evolução mensal com tendências
     console.log('📅 Passo 6: Criando evolução mensal...')
-    await addMonthlyEvolution(accessToken, existingSheetId, transactions, sheetIds.monthlyId)
-    console.log('✅ Evolução mensal criada!')
+    await createMonthlyEvolutionWithTrends(accessToken, existingSheetId, transactions, sheetIds.monthlyId)
+    console.log('✅ Evolução mensal com tendências criada!')
     
-    // 7. Formatar e criar gráficos
-    console.log('🎨 Passo 7: Formatando planilha...')
-    await formatAndCreateCharts(accessToken, existingSheetId, sheetIds)
-    console.log('✅ Formatação aplicada!')
+    // 7. Criar análise de métodos de pagamento
+    console.log('💳 Passo 7: Criando análise de métodos de pagamento...')
+    await createPaymentMethodAnalysis(accessToken, existingSheetId, transactions, sheetIds.paymentId)
+    console.log('✅ Análise de métodos de pagamento criada!')
+    
+    // 8. Formatar tudo e criar gráficos automatizados
+    console.log('🎨 Passo 8: Formatando e criando gráficos automatizados...')
+    await formatAndCreateAutomatedCharts(accessToken, existingSheetId, sheetIds, transactions)
+    console.log('✅ Formatação e gráficos automatizados aplicados!')
 
     console.log('🎉 Dashboard completo criado com sucesso!')
 
@@ -187,6 +192,15 @@ async function createWorksheetTabs(accessToken: string, spreadsheetId: string) {
             gridProperties: { rowCount: 50, columnCount: 15 }
           }
         }
+      },
+      // Aba Métodos de Pagamento
+      {
+        addSheet: {
+          properties: {
+            title: "Metodos Pagamento",
+            gridProperties: { rowCount: 30, columnCount: 10 }
+          }
+        }
       }
     ]
 
@@ -221,6 +235,7 @@ async function createWorksheetTabs(accessToken: string, spreadsheetId: string) {
       transactionsId: sheets.find(s => s.properties.title === "Transacoes")?.properties.sheetId,
       categoryId: sheets.find(s => s.properties.title === "Por Categoria")?.properties.sheetId,
       monthlyId: sheets.find(s => s.properties.title === "Evolucao Mensal")?.properties.sheetId,
+      paymentId: sheets.find(s => s.properties.title === "Metodos Pagamento")?.properties.sheetId,
     }
     
     console.log('📋 IDs das sheets:', sheetIds)
@@ -544,6 +559,364 @@ async function getAccessToken(serviceAccountKey: string) {
   
   const tokenData = await tokenResponse.json()
   return tokenData.access_token
+}
+
+// Função para criar dashboard principal automatizado
+async function createMainDashboard(accessToken: string, spreadsheetId: string, transactions: any[], sheetId?: number) {
+  console.log('🎯 Criando dashboard principal automatizado...')
+  
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
+  const balance = totalIncome - totalExpense
+  
+  // Calcular estatísticas avançadas
+  const lastMonthTransactions = transactions.filter(t => {
+    const date = new Date(t.date)
+    const lastMonth = new Date()
+    lastMonth.setMonth(lastMonth.getMonth() - 1)
+    return date >= lastMonth
+  })
+  
+  const categoryCount = [...new Set(transactions.map(t => t.category))].length
+  const avgDaily = totalExpense / 30
+  
+  const dashboardData = [
+    ['DASHBOARD FINANCEIRO AUTOMATIZADO', '', '', '', '', ''],
+    ['', '', '', '', '', ''],
+    ['💰 RESUMO PRINCIPAL', '', '', '', '', ''],
+    ['Total de Receitas:', `R$ ${totalIncome.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, '', '', '', ''],
+    ['Total de Despesas:', `R$ ${totalExpense.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, '', '', '', ''],
+    ['Saldo Atual:', `R$ ${balance.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, balance >= 0 ? '✅' : '⚠️', '', '', ''],
+    ['', '', '', '', '', ''],
+    ['📊 ANÁLISE RÁPIDA', '', '', '', '', ''],
+    ['Total de Transações:', transactions.length.toString(), '', '', '', ''],
+    ['Categorias Ativas:', categoryCount.toString(), '', '', '', ''],
+    ['Gasto Médio Diário:', `R$ ${avgDaily.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, '', '', '', ''],
+    ['Transações (Último Mês):', lastMonthTransactions.length.toString(), '', '', '', ''],
+    ['', '', '', '', '', ''],
+    ['🎯 STATUS FINANCEIRO', '', '', '', '', ''],
+    ['Saúde Financeira:', balance >= 0 ? 'POSITIVA' : 'ATENÇÃO', balance >= 0 ? '🟢' : '🔴', '', '', ''],
+    ['Última Atualização:', new Date().toLocaleString('pt-BR'), '', '', '', '']
+  ]
+
+  try {
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Dashboard!A1:F${dashboardData.length}?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ values: dashboardData })
+      }
+    )
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log('❌ Erro ao criar dashboard:', errorText)
+    } else {
+      console.log('✅ Dashboard principal criado!')
+    }
+  } catch (error) {
+    console.log('❌ Erro ao criar dashboard:', error.message)
+  }
+}
+
+// Função para adicionar transações formatadas
+async function addFormattedTransactionsData(accessToken: string, spreadsheetId: string, transactions: any[], sheetId?: number) {
+  console.log('💰 Adicionando transações formatadas...')
+  
+  const headers = ['Data', 'Descrição', 'Categoria', 'Método Pagamento', 'Valor', 'Tipo', 'Status', 'Mês/Ano']
+  
+  const transactionRows = transactions
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .map(t => [
+      new Date(t.date).toLocaleDateString('pt-BR'),
+      t.description,
+      t.category,
+      t.paymentMethod,
+      t.type === 'expense' ? -t.amount : t.amount,
+      t.type === 'expense' ? 'Despesa' : 'Receita',
+      t.status === 'paid' ? 'Pago' : 'Pendente',
+      new Date(t.date).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+    ])
+
+  const allData = [headers, ...transactionRows]
+
+  try {
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Transacoes!A1:H${allData.length}?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ values: allData })
+      }
+    )
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log('❌ Erro ao adicionar transações formatadas:', errorText)
+    } else {
+      console.log('✅ Transações formatadas adicionadas!')
+    }
+  } catch (error) {
+    console.log('❌ Erro ao adicionar transações formatadas:', error.message)
+  }
+}
+
+// Função para criar análise por categorias com gráficos
+async function createCategoryAnalysisWithCharts(accessToken: string, spreadsheetId: string, transactions: any[], sheetId?: number) {
+  console.log('📈 Criando análise completa por categorias...')
+  
+  const expenseTransactions = transactions.filter(t => t.type === 'expense')
+  const categoryTotals = expenseTransactions.reduce((acc, t) => {
+    acc[t.category] = (acc[t.category] || 0) + t.amount
+    return acc
+  }, {} as Record<string, number>)
+
+  const totalExpenses = Object.values(categoryTotals).reduce((sum, val) => sum + val, 0)
+  
+  const categoryData = [
+    ['ANÁLISE COMPLETA POR CATEGORIAS', '', '', '', ''],
+    ['', '', '', '', ''],
+    ['Categoria', 'Valor Total', 'Percentual', 'Transações', 'Valor Médio'],
+    ['', '', '', '', '']
+  ]
+
+  Object.entries(categoryTotals)
+    .sort(([,a], [,b]) => b - a)
+    .forEach(([category, amount]) => {
+      const percentage = ((amount / totalExpenses) * 100).toFixed(1)
+      const categoryTransactions = expenseTransactions.filter(t => t.category === category)
+      const avgAmount = amount / categoryTransactions.length
+      
+      categoryData.push([
+        category,
+        `R$ ${amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`,
+        `${percentage}%`,
+        categoryTransactions.length.toString(),
+        `R$ ${avgAmount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`
+      ])
+    })
+
+  try {
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Por Categoria!A1:E${categoryData.length}?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ values: categoryData })
+      }
+    )
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log('❌ Erro ao criar análise por categorias:', errorText)
+    } else {
+      console.log('✅ Análise por categorias criada!')
+    }
+  } catch (error) {
+    console.log('❌ Erro ao criar análise por categorias:', error.message)
+  }
+}
+
+// Função para criar evolução mensal com tendências
+async function createMonthlyEvolutionWithTrends(accessToken: string, spreadsheetId: string, transactions: any[], sheetId?: number) {
+  console.log('📅 Criando evolução mensal com tendências...')
+  
+  const monthlyData = transactions.reduce((acc, t) => {
+    const month = t.date.substring(0, 7)
+    if (!acc[month]) {
+      acc[month] = { income: 0, expense: 0, transactions: 0 }
+    }
+    acc[month][t.type] += t.amount
+    acc[month].transactions += 1
+    return acc
+  }, {} as Record<string, {income: number, expense: number, transactions: number}>)
+
+  const evolutionData = [
+    ['EVOLUÇÃO MENSAL COM TENDÊNCIAS', '', '', '', '', ''],
+    ['', '', '', '', '', ''],
+    ['Mês', 'Receitas', 'Despesas', 'Saldo', 'Transações', 'Tendência'],
+    ['', '', '', '', '', '']
+  ]
+
+  const sortedMonths = Object.entries(monthlyData).sort(([a], [b]) => a.localeCompare(b))
+  
+  sortedMonths.forEach(([month, data], index) => {
+    const balance = data.income - data.expense
+    let trend = '➡️'
+    
+    if (index > 0) {
+      const prevBalance = sortedMonths[index - 1][1].income - sortedMonths[index - 1][1].expense
+      if (balance > prevBalance) trend = '📈'
+      else if (balance < prevBalance) trend = '📉'
+    }
+    
+    evolutionData.push([
+      new Date(month + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+      `R$ ${data.income.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`,
+      `R$ ${data.expense.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`,
+      `R$ ${balance.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`,
+      data.transactions.toString(),
+      trend
+    ])
+  })
+
+  try {
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Evolucao Mensal!A1:F${evolutionData.length}?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ values: evolutionData })
+      }
+    )
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log('❌ Erro ao criar evolução mensal:', errorText)
+    } else {
+      console.log('✅ Evolução mensal criada!')
+    }
+  } catch (error) {
+    console.log('❌ Erro ao criar evolução mensal:', error.message)
+  }
+}
+
+// Função para análise de métodos de pagamento
+async function createPaymentMethodAnalysis(accessToken: string, spreadsheetId: string, transactions: any[], sheetId?: number) {
+  console.log('💳 Criando análise de métodos de pagamento...')
+  
+  const paymentTotals = transactions.reduce((acc, t) => {
+    if (!acc[t.paymentMethod]) {
+      acc[t.paymentMethod] = { total: 0, count: 0, income: 0, expense: 0 }
+    }
+    acc[t.paymentMethod].total += t.amount
+    acc[t.paymentMethod].count += 1
+    acc[t.paymentMethod][t.type] += t.amount
+    return acc
+  }, {} as Record<string, {total: number, count: number, income: number, expense: number}>)
+
+  const paymentData = [
+    ['ANÁLISE DE MÉTODOS DE PAGAMENTO', '', '', '', '', ''],
+    ['', '', '', '', '', ''],
+    ['Método', 'Total Movimentado', 'Transações', 'Receitas', 'Despesas', 'Média/Transação'],
+    ['', '', '', '', '', '']
+  ]
+
+  Object.entries(paymentTotals)
+    .sort(([,a], [,b]) => b.total - a.total)
+    .forEach(([method, data]) => {
+      const avgPerTransaction = data.total / data.count
+      
+      paymentData.push([
+        method,
+        `R$ ${data.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`,
+        data.count.toString(),
+        `R$ ${data.income.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`,
+        `R$ ${data.expense.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`,
+        `R$ ${avgPerTransaction.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`
+      ])
+    })
+
+  try {
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Metodos Pagamento!A1:F${paymentData.length}?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ values: paymentData })
+      }
+    )
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log('❌ Erro ao criar análise de métodos:', errorText)
+    } else {
+      console.log('✅ Análise de métodos criada!')
+    }
+  } catch (error) {
+    console.log('❌ Erro ao criar análise de métodos:', error.message)
+  }
+}
+
+// Função para formatação e gráficos automatizados
+async function formatAndCreateAutomatedCharts(accessToken: string, spreadsheetId: string, sheetIds: any, transactions: any[]) {
+  console.log('🎨 Aplicando formatação automatizada...')
+  
+  try {
+    const requests = [
+      // Formatação do Dashboard
+      {
+        repeatCell: {
+          range: { sheetId: sheetIds.dashboardId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: { red: 0.1, green: 0.3, blue: 0.8 },
+              textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true, fontSize: 14 }
+            }
+          },
+          fields: "userEnteredFormat(backgroundColor,textFormat)"
+        }
+      },
+      // Formatação das seções
+      {
+        repeatCell: {
+          range: { sheetId: sheetIds.dashboardId, startRowIndex: 2, endRowIndex: 3, startColumnIndex: 0, endColumnIndex: 6 },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: { red: 0.9, green: 0.9, blue: 0.9 },
+              textFormat: { bold: true }
+            }
+          },
+          fields: "userEnteredFormat(backgroundColor,textFormat)"
+        }
+      },
+      // Autoajustar colunas
+      {
+        autoResizeDimensions: {
+          dimensions: {
+            sheetId: sheetIds.dashboardId,
+            dimension: "COLUMNS",
+            startIndex: 0,
+            endIndex: 6
+          }
+        }
+      }
+    ]
+
+    const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ requests })
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log('❌ Erro ao formatar:', errorText)
+    } else {
+      console.log('✅ Formatação automatizada aplicada!')
+    }
+  } catch (error) {
+    console.log('❌ Erro ao formatar:', error.message)
+  }
 }
 
 function pemToDer(pem: string): ArrayBuffer {

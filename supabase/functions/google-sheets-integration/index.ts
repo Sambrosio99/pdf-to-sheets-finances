@@ -23,6 +23,17 @@ serve(async (req) => {
     if (serviceAccountKey) {
       console.log('Primeiros 50 caracteres:', serviceAccountKey.substring(0, 50))
       console.log('Últimos 50 caracteres:', serviceAccountKey.substring(serviceAccountKey.length - 50))
+      
+      // Verificar se é um JSON válido
+      try {
+        const testParse = JSON.parse(serviceAccountKey)
+        console.log('✅ JSON é válido')
+        console.log('Client email:', testParse.client_email)
+        console.log('Project ID:', testParse.project_id)
+        console.log('Type:', testParse.type)
+      } catch (e) {
+        console.log('❌ JSON inválido:', e.message)
+      }
     }
     
     if (!serviceAccountKey) {

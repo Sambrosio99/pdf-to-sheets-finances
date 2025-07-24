@@ -79,35 +79,30 @@ serve(async (req) => {
     const accessToken = await getAccessToken(serviceAccountKey)
     console.log('✅ Access token obtido!')
 
-    // Teste simples de criação de planilha
-    console.log('📊 Testando criação de planilha...')
+    // Teste com planilha existente
+    const existingSheetId = '1z5KpIdcw4vJfUN_7iMnNCyNYvWM2s-G1Tnx_5CHzADs'
+    console.log('📊 Testando acesso à planilha existente:', existingSheetId)
     
-    const createResponse = await fetch(
-      'https://sheets.googleapis.com/v4/spreadsheets',
+    // Primeiro vamos tentar ler a planilha
+    const readResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${existingSheetId}`,
       {
-        method: 'POST',
+        method: 'GET',
         headers: { 
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`
-        },
-        body: JSON.stringify({
-          properties: {
-            title: `Teste Dashboard - ${new Date().toLocaleString('pt-BR')}`,
-            locale: 'pt_BR'
-          }
-        })
+        }
       }
     )
 
-    console.log('📊 Status da criação:', createResponse.status)
+    console.log('📊 Status da leitura:', readResponse.status)
 
-    if (!createResponse.ok) {
-      const errorText = await createResponse.text()
-      console.error('❌ Erro na criação:', errorText)
+    if (!readResponse.ok) {
+      const errorText = await readResponse.text()
+      console.error('❌ Erro na leitura:', errorText)
       return new Response(
         JSON.stringify({ 
-          error: 'Failed to create spreadsheet',
-          status: createResponse.status,
+          error: 'Failed to read spreadsheet',
+          status: readResponse.status,
           details: errorText
         }),
         { 
@@ -117,15 +112,54 @@ serve(async (req) => {
       )
     }
 
-    const newSheet = await createResponse.json()
-    console.log('✅ Planilha criada com sucesso! ID:', newSheet.spreadsheetId)
+    console.log('✅ Conseguiu ler a planilha!')
+
+    // Agora vamos tentar escrever alguns dados
+    const testData = [
+      ['Data', 'Descrição', 'Categoria', 'Valor', 'Tipo'],
+      ['2025-01-24', 'Teste de integração', 'Teste', 100.00, 'income']
+    ]
+
+    const writeResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${existingSheetId}/values/A1:E2?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          values: testData
+        })
+      }
+    )
+
+    console.log('📊 Status da escrita:', writeResponse.status)
+
+    if (!writeResponse.ok) {
+      const errorText = await writeResponse.text()
+      console.error('❌ Erro na escrita:', errorText)
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to write to spreadsheet',
+          status: writeResponse.status,
+          details: errorText
+        }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    console.log('✅ Conseguiu escrever na planilha!')
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        spreadsheetId: newSheet.spreadsheetId,
-        url: `https://docs.google.com/spreadsheets/d/${newSheet.spreadsheetId}`,
-        message: 'Teste de criação bem-sucedido!'
+        spreadsheetId: existingSheetId,
+        url: `https://docs.google.com/spreadsheets/d/${existingSheetId}`,
+        message: 'Teste com planilha existente bem-sucedido!'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

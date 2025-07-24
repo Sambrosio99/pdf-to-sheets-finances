@@ -16,8 +16,10 @@ serve(async (req) => {
     console.log('🚀 Função iniciada com action:', action)
     console.log('📊 Número de transações:', transactions?.length || 0)
     
-    // Pegar as credenciais do service account - usando o nome correto do segredo
-    const serviceAccountKey = Deno.env.get('CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE')
+    // Pegar as credenciais do service account - testando diferentes nomes
+    let serviceAccountKey = Deno.env.get('CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE') || 
+                           Deno.env.get('CHAVE_API_DO_GOOGLE_SHEETS') ||
+                           Deno.env.get('GOOGLE_SERVICE_ACCOUNT_KEY')
     
     console.log('=== DEBUG COMPLETO ===')
     console.log('Chave existe:', !!serviceAccountKey)

@@ -202,10 +202,11 @@ async function createWorksheetTabs(accessToken: string, spreadsheetId: string) {
     if (!response.ok) {
       const errorText = await response.text()
       console.log('⚠️ Erro ao criar abas:', errorText)
+      // Continuar mesmo com erro
+    } else {
+      const result = await response.json()
+      console.log('📋 Resultado da criação:', result)
     }
-    
-    const result = await response.json()
-    console.log('📋 Resultado da criação:', result)
     
     // Buscar os IDs das sheets criadas
     const sheetInfo = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {

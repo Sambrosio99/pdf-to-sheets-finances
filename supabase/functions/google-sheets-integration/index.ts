@@ -34,33 +34,38 @@ serve(async (req) => {
     
     console.log('🚀 Iniciando criação do dashboard completo...')
     
-    // 1. Criar as abas necessárias
-    console.log('📋 Passo 1: Criando abas...')
+    // 1. Limpar planilha primeiro
+    console.log('🧹 Passo 1: Limpando planilha...')
+    await clearExistingSheets(accessToken, existingSheetId)
+    console.log('✅ Planilha limpa!')
+    
+    // 2. Criar as abas necessárias
+    console.log('📋 Passo 2: Criando abas...')
     await createWorksheetTabs(accessToken, existingSheetId)
     console.log('✅ Abas criadas!')
     
-    // 2. Adicionar dados das transações
-    console.log('💰 Passo 2: Adicionando transações...')
+    // 3. Adicionar dados das transações
+    console.log('💰 Passo 3: Adicionando transações...')
     await addTransactionsData(accessToken, existingSheetId, transactions)
     console.log('✅ Transações adicionadas!')
     
-    // 3. Adicionar resumo financeiro
-    console.log('📊 Passo 3: Criando resumo financeiro...')
+    // 4. Adicionar resumo financeiro
+    console.log('📊 Passo 4: Criando resumo financeiro...')
     await addFinancialSummary(accessToken, existingSheetId, transactions)
     console.log('✅ Resumo financeiro criado!')
     
-    // 4. Adicionar análise por categorias
-    console.log('📈 Passo 4: Criando análise por categorias...')
+    // 5. Adicionar análise por categorias
+    console.log('📈 Passo 5: Criando análise por categorias...')
     await addCategoryAnalysis(accessToken, existingSheetId, transactions)
     console.log('✅ Análise por categorias criada!')
     
-    // 5. Adicionar evolução mensal
-    console.log('📅 Passo 5: Criando evolução mensal...')
+    // 6. Adicionar evolução mensal
+    console.log('📅 Passo 6: Criando evolução mensal...')
     await addMonthlyEvolution(accessToken, existingSheetId, transactions)
     console.log('✅ Evolução mensal criada!')
     
-    // 6. Formatar e criar gráficos
-    console.log('🎨 Passo 6: Formatando planilha...')
+    // 7. Formatar e criar gráficos
+    console.log('🎨 Passo 7: Formatando planilha...')
     await formatAndCreateCharts(accessToken, existingSheetId)
     console.log('✅ Formatação aplicada!')
 
@@ -90,6 +95,56 @@ serve(async (req) => {
     )
   }
 })
+
+// Função para limpar sheets existentes
+async function clearExistingSheets(accessToken: string, spreadsheetId: string) {
+  console.log('🧹 Limpando sheets existentes...')
+  
+  try {
+    // Obter informações da planilha para ver quais sheets existem
+    const spreadsheetInfo = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    })
+    
+    if (!spreadsheetInfo.ok) {
+      console.log('⚠️ Erro ao obter info da planilha, continuando...')
+      return
+    }
+    
+    const info = await spreadsheetInfo.json()
+    const requests = []
+    
+    // Deletar sheets específicos se existirem
+    const sheetsToDelete = ['📊 Dashboard', '💰 Transações', '📈 Por Categoria', '📅 Evolução Mensal']
+    
+    for (const sheet of info.sheets || []) {
+      if (sheetsToDelete.includes(sheet.properties.title)) {
+        requests.push({
+          deleteSheet: {
+            sheetId: sheet.properties.sheetId
+          }
+        })
+      }
+    }
+    
+    if (requests.length > 0) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ requests })
+      })
+      console.log('✅ Sheets antigos deletados!')
+    }
+    
+  } catch (error) {
+    console.log('⚠️ Erro ao limpar sheets (pode ser normal):', error.message)
+  }
+}
 
 // Função para criar as abas/sheets
 async function createWorksheetTabs(accessToken: string, spreadsheetId: string) {

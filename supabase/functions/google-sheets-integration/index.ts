@@ -32,25 +32,39 @@ serve(async (req) => {
     // ID da planilha existente do usuário
     const existingSheetId = '1z5KpIdcw4vJfUN_7iMnNCyNYvWM2s-G1Tnx_5CHzAds'
     
+    console.log('🚀 Iniciando criação do dashboard completo...')
+    
     // 1. Criar as abas necessárias
+    console.log('📋 Passo 1: Criando abas...')
     await createWorksheetTabs(accessToken, existingSheetId)
+    console.log('✅ Abas criadas!')
     
     // 2. Adicionar dados das transações
+    console.log('💰 Passo 2: Adicionando transações...')
     await addTransactionsData(accessToken, existingSheetId, transactions)
+    console.log('✅ Transações adicionadas!')
     
     // 3. Adicionar resumo financeiro
+    console.log('📊 Passo 3: Criando resumo financeiro...')
     await addFinancialSummary(accessToken, existingSheetId, transactions)
+    console.log('✅ Resumo financeiro criado!')
     
     // 4. Adicionar análise por categorias
+    console.log('📈 Passo 4: Criando análise por categorias...')
     await addCategoryAnalysis(accessToken, existingSheetId, transactions)
+    console.log('✅ Análise por categorias criada!')
     
     // 5. Adicionar evolução mensal
+    console.log('📅 Passo 5: Criando evolução mensal...')
     await addMonthlyEvolution(accessToken, existingSheetId, transactions)
+    console.log('✅ Evolução mensal criada!')
     
     // 6. Formatar e criar gráficos
+    console.log('🎨 Passo 6: Formatando planilha...')
     await formatAndCreateCharts(accessToken, existingSheetId)
+    console.log('✅ Formatação aplicada!')
 
-    console.log('✅ Dashboard completo criado com sucesso!')
+    console.log('🎉 Dashboard completo criado com sucesso!')
 
     return new Response(
       JSON.stringify({ 

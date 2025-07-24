@@ -39,34 +39,34 @@ serve(async (req) => {
     await clearExistingSheets(accessToken, existingSheetId)
     console.log('✅ Planilha limpa!')
     
-    // 2. Criar as abas necessárias
+    // 2. Criar as abas necessárias e obter IDs
     console.log('📋 Passo 2: Criando abas...')
-    await createWorksheetTabs(accessToken, existingSheetId)
-    console.log('✅ Abas criadas!')
+    const sheetIds = await createWorksheetTabs(accessToken, existingSheetId)
+    console.log('✅ Abas criadas! IDs:', sheetIds)
     
     // 3. Adicionar dados das transações
     console.log('💰 Passo 3: Adicionando transações...')
-    await addTransactionsData(accessToken, existingSheetId, transactions)
+    await addTransactionsData(accessToken, existingSheetId, transactions, sheetIds.transactionsId)
     console.log('✅ Transações adicionadas!')
     
     // 4. Adicionar resumo financeiro
     console.log('📊 Passo 4: Criando resumo financeiro...')
-    await addFinancialSummary(accessToken, existingSheetId, transactions)
+    await addFinancialSummary(accessToken, existingSheetId, transactions, sheetIds.dashboardId)
     console.log('✅ Resumo financeiro criado!')
     
     // 5. Adicionar análise por categorias
     console.log('📈 Passo 5: Criando análise por categorias...')
-    await addCategoryAnalysis(accessToken, existingSheetId, transactions)
+    await addCategoryAnalysis(accessToken, existingSheetId, transactions, sheetIds.categoryId)
     console.log('✅ Análise por categorias criada!')
     
     // 6. Adicionar evolução mensal
     console.log('📅 Passo 6: Criando evolução mensal...')
-    await addMonthlyEvolution(accessToken, existingSheetId, transactions)
+    await addMonthlyEvolution(accessToken, existingSheetId, transactions, sheetIds.monthlyId)
     console.log('✅ Evolução mensal criada!')
     
     // 7. Formatar e criar gráficos
     console.log('🎨 Passo 7: Formatando planilha...')
-    await formatAndCreateCharts(accessToken, existingSheetId)
+    await formatAndCreateCharts(accessToken, existingSheetId, sheetIds)
     console.log('✅ Formatação aplicada!')
 
     console.log('🎉 Dashboard completo criado com sucesso!')
@@ -156,7 +156,7 @@ async function createWorksheetTabs(accessToken: string, spreadsheetId: string) {
       {
         addSheet: {
           properties: {
-            title: "📊 Dashboard",
+            title: "Dashboard",
             gridProperties: { rowCount: 100, columnCount: 26 }
           }
         }
@@ -165,7 +165,7 @@ async function createWorksheetTabs(accessToken: string, spreadsheetId: string) {
       {
         addSheet: {
           properties: {
-            title: "💰 Transações",
+            title: "Transacoes",
             gridProperties: { rowCount: 1000, columnCount: 10 }
           }
         }
@@ -174,7 +174,7 @@ async function createWorksheetTabs(accessToken: string, spreadsheetId: string) {
       {
         addSheet: {
           properties: {
-            title: "📈 Por Categoria",
+            title: "Por Categoria",
             gridProperties: { rowCount: 50, columnCount: 15 }
           }
         }
@@ -183,7 +183,7 @@ async function createWorksheetTabs(accessToken: string, spreadsheetId: string) {
       {
         addSheet: {
           properties: {
-            title: "📅 Evolução Mensal",
+            title: "Evolucao Mensal",
             gridProperties: { rowCount: 50, columnCount: 15 }
           }
         }
@@ -200,18 +200,41 @@ async function createWorksheetTabs(accessToken: string, spreadsheetId: string) {
     })
     
     if (!response.ok) {
-      console.log('⚠️ Algumas abas podem já existir, continuando...')
-    } else {
-      console.log('✅ Abas criadas com sucesso!')
+      const errorText = await response.text()
+      console.log('⚠️ Erro ao criar abas:', errorText)
     }
+    
+    const result = await response.json()
+    console.log('📋 Resultado da criação:', result)
+    
+    // Buscar os IDs das sheets criadas
+    const sheetInfo = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    })
+    
+    const info = await sheetInfo.json()
+    const sheets = info.sheets || []
+    
+    const sheetIds = {
+      dashboardId: sheets.find(s => s.properties.title === "Dashboard")?.properties.sheetId,
+      transactionsId: sheets.find(s => s.properties.title === "Transacoes")?.properties.sheetId,
+      categoryId: sheets.find(s => s.properties.title === "Por Categoria")?.properties.sheetId,
+      monthlyId: sheets.find(s => s.properties.title === "Evolucao Mensal")?.properties.sheetId,
+    }
+    
+    console.log('📋 IDs das sheets:', sheetIds)
+    return sheetIds
+    
   } catch (error) {
-    console.log('⚠️ Erro ao criar abas (pode ser que já existam):', error.message)
+    console.log('❌ Erro ao criar abas:', error.message)
+    throw error
   }
 }
 
 // Função para adicionar dados das transações
-async function addTransactionsData(accessToken: string, spreadsheetId: string, transactions: any[]) {
+async function addTransactionsData(accessToken: string, spreadsheetId: string, transactions: any[], sheetId?: number) {
   console.log('💰 Adicionando dados das transações...')
+  console.log('💰 Total de transações:', transactions.length)
   
   const headers = ['Data', 'Descrição', 'Categoria', 'Método', 'Valor', 'Tipo', 'Status']
   
@@ -226,27 +249,41 @@ async function addTransactionsData(accessToken: string, spreadsheetId: string, t
   ])
 
   const allData = [headers, ...transactionRows]
+  console.log('💰 Dados preparados - linhas:', allData.length)
 
-  await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/💰 Transações!A1:G${allData.length}?valueInputOption=RAW`,
-    {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ values: allData })
+  try {
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Transacoes!A1:G${allData.length}?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ values: allData })
+      }
+    )
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log('❌ Erro ao adicionar transações:', errorText)
+    } else {
+      console.log('✅ Transações enviadas com sucesso!')
     }
-  )
+  } catch (error) {
+    console.log('❌ Erro ao adicionar transações:', error.message)
+  }
 }
 
 // Função para adicionar resumo financeiro
-async function addFinancialSummary(accessToken: string, spreadsheetId: string, transactions: any[]) {
+async function addFinancialSummary(accessToken: string, spreadsheetId: string, transactions: any[], sheetId?: number) {
   console.log('📊 Criando resumo financeiro...')
   
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
   const balance = totalIncome - totalExpense
+  
+  console.log('📊 Calculados - Receitas:', totalIncome, 'Despesas:', totalExpense, 'Saldo:', balance)
   
   const summaryData = [
     ['🏦 RESUMO FINANCEIRO', '', '', ''],
@@ -262,21 +299,32 @@ async function addFinancialSummary(accessToken: string, spreadsheetId: string, t
     ['💳 Ticket Médio:', `R$ ${(totalExpense / transactions.filter(t => t.type === 'expense').length || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, '', '']
   ]
 
-  await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/📊 Dashboard!A1:D${summaryData.length}?valueInputOption=RAW`,
-    {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ values: summaryData })
+  try {
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Dashboard!A1:D${summaryData.length}?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ values: summaryData })
+      }
+    )
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log('❌ Erro ao adicionar resumo:', errorText)
+    } else {
+      console.log('✅ Resumo financeiro enviado!')
     }
-  )
+  } catch (error) {
+    console.log('❌ Erro ao adicionar resumo:', error.message)
+  }
 }
 
 // Função para análise por categorias
-async function addCategoryAnalysis(accessToken: string, spreadsheetId: string, transactions: any[]) {
+async function addCategoryAnalysis(accessToken: string, spreadsheetId: string, transactions: any[], sheetId?: number) {
   console.log('📈 Criando análise por categorias...')
   
   const categoryTotals = transactions
@@ -304,21 +352,32 @@ async function addCategoryAnalysis(accessToken: string, spreadsheetId: string, t
       ])
     })
 
-  await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/📈 Por Categoria!A1:C${categoryData.length}?valueInputOption=RAW`,
-    {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ values: categoryData })
+  try {
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Por Categoria!A1:C${categoryData.length}?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ values: categoryData })
+      }
+    )
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log('❌ Erro ao adicionar categorias:', errorText)
+    } else {
+      console.log('✅ Análise por categorias enviada!')
     }
-  )
+  } catch (error) {
+    console.log('❌ Erro ao adicionar categorias:', error.message)
+  }
 }
 
 // Função para evolução mensal
-async function addMonthlyEvolution(accessToken: string, spreadsheetId: string, transactions: any[]) {
+async function addMonthlyEvolution(accessToken: string, spreadsheetId: string, transactions: any[], sheetId?: number) {
   console.log('📅 Criando evolução mensal...')
   
   const monthlyData = transactions.reduce((acc, t) => {
@@ -347,59 +406,81 @@ async function addMonthlyEvolution(accessToken: string, spreadsheetId: string, t
       ])
     })
 
-  await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/📅 Evolução Mensal!A1:D${evolutionData.length}?valueInputOption=RAW`,
-    {
-      method: 'PUT',
+  try {
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Evolucao Mensal!A1:D${evolutionData.length}?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ values: evolutionData })
+      }
+    )
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log('❌ Erro ao adicionar evolução mensal:', errorText)
+    } else {
+      console.log('✅ Evolução mensal enviada!')
+    }
+  } catch (error) {
+    console.log('❌ Erro ao adicionar evolução mensal:', error.message)
+  }
+}
+
+// Função para formatar e criar gráficos
+async function formatAndCreateCharts(accessToken: string, spreadsheetId: string, sheetIds?: any) {
+  console.log('🎨 Formatando planilha e criando gráficos...')
+  
+  try {
+    const requests = [
+      // Formatar cabeçalhos - Dashboard
+      {
+        repeatCell: {
+          range: { sheetId: sheetIds?.dashboardId || 0, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 4 },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: { red: 0.2, green: 0.6, blue: 0.9 },
+              textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true }
+            }
+          },
+          fields: "userEnteredFormat(backgroundColor,textFormat)"
+        }
+      },
+      // Formatar valores de moeda
+      {
+        repeatCell: {
+          range: { sheetId: sheetIds?.dashboardId || 0, startRowIndex: 2, endRowIndex: 15, startColumnIndex: 1, endColumnIndex: 2 },
+          cell: {
+            userEnteredFormat: {
+              numberFormat: { type: "CURRENCY", pattern: "R$ #,##0.00" }
+            }
+          },
+          fields: "userEnteredFormat.numberFormat"
+        }
+      }
+    ]
+
+    const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`
       },
-      body: JSON.stringify({ values: evolutionData })
+      body: JSON.stringify({ requests })
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log('❌ Erro ao formatar:', errorText)
+    } else {
+      console.log('✅ Formatação aplicada!')
     }
-  )
-}
-
-// Função para formatar e criar gráficos
-async function formatAndCreateCharts(accessToken: string, spreadsheetId: string) {
-  console.log('🎨 Formatando planilha e criando gráficos...')
-  
-  const requests = [
-    // Formatar cabeçalhos - Dashboard
-    {
-      repeatCell: {
-        range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 4 },
-        cell: {
-          userEnteredFormat: {
-            backgroundColor: { red: 0.2, green: 0.6, blue: 0.9 },
-            textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true }
-          }
-        },
-        fields: "userEnteredFormat(backgroundColor,textFormat)"
-      }
-    },
-    // Formatar valores de moeda
-    {
-      repeatCell: {
-        range: { sheetId: 0, startRowIndex: 2, endRowIndex: 15, startColumnIndex: 1, endColumnIndex: 2 },
-        cell: {
-          userEnteredFormat: {
-            numberFormat: { type: "CURRENCY", pattern: "R$ #,##0.00" }
-          }
-        },
-        fields: "userEnteredFormat.numberFormat"
-      }
-    }
-  ]
-
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`
-    },
-    body: JSON.stringify({ requests })
-  })
+  } catch (error) {
+    console.log('❌ Erro ao formatar:', error.message)
+  }
 }
 
 async function getAccessToken(serviceAccountKey: string) {

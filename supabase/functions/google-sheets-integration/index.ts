@@ -13,8 +13,9 @@ serve(async (req) => {
   try {
     console.log('🚀 Criando Dashboard Completo do Google Sheets')
     
-    const { action, transactions } = await req.json()
+    const { action, transactions, spreadsheetId } = await req.json()
     console.log('📊 Transações recebidas:', transactions?.length || 0)
+    console.log('📝 Planilha ID:', spreadsheetId)
     
     const serviceAccountKey = Deno.env.get('CHAVE_DA_CONTA_DO_SERVIÇO_DO_GOOGLE')
     
@@ -29,49 +30,49 @@ serve(async (req) => {
     const accessToken = await getAccessToken(serviceAccountKey)
     console.log('✅ Access token obtido!')
 
-    // ID da planilha existente do usuário
-    const existingSheetId = '1z5KpIdcw4vJfUN_7iMnNCyNYvWM2s-G1Tnx_5CHzAds'
+    // Usar o ID da planilha fornecido pelo usuário
+    const targetSpreadsheetId = spreadsheetId || '1z5KpIdcw4vJfUN_7iMnNCyNYvWM2s-G1Tnx_5CHzAds'
     
     console.log('🚀 Iniciando criação do dashboard completo automatizado...')
     
     // 1. Limpar planilha primeiro
     console.log('🧹 Passo 1: Limpando planilha...')
-    await clearExistingSheets(accessToken, existingSheetId)
+    await clearExistingSheets(accessToken, targetSpreadsheetId)
     console.log('✅ Planilha limpa!')
     
     // 2. Criar as abas necessárias e obter IDs
     console.log('📋 Passo 2: Criando abas...')
-    const sheetIds = await createWorksheetTabs(accessToken, existingSheetId)
+    const sheetIds = await createWorksheetTabs(accessToken, targetSpreadsheetId)
     console.log('✅ Abas criadas! IDs:', sheetIds)
     
     // 3. Criar Dashboard Principal Automatizado
     console.log('🎯 Passo 3: Criando Dashboard Principal...')
-    await createMainDashboard(accessToken, existingSheetId, transactions, sheetIds.dashboardId)
+    await createMainDashboard(accessToken, targetSpreadsheetId, transactions, sheetIds.dashboardId)
     console.log('✅ Dashboard principal criado!')
     
     // 4. Adicionar dados das transações com formatação
     console.log('💰 Passo 4: Adicionando transações formatadas...')
-    await addFormattedTransactionsData(accessToken, existingSheetId, transactions, sheetIds.transactionsId)
+    await addFormattedTransactionsData(accessToken, targetSpreadsheetId, transactions, sheetIds.transactionsId)
     console.log('✅ Transações formatadas adicionadas!')
     
     // 5. Criar análise por categorias com gráficos
     console.log('📈 Passo 5: Criando análise por categorias...')
-    await createCategoryAnalysisWithCharts(accessToken, existingSheetId, transactions, sheetIds.categoryId)
+    await createCategoryAnalysisWithCharts(accessToken, targetSpreadsheetId, transactions, sheetIds.categoryId)
     console.log('✅ Análise por categorias com gráficos criada!')
     
     // 6. Criar evolução mensal com tendências
     console.log('📅 Passo 6: Criando evolução mensal...')
-    await createMonthlyEvolutionWithTrends(accessToken, existingSheetId, transactions, sheetIds.monthlyId)
+    await createMonthlyEvolutionWithTrends(accessToken, targetSpreadsheetId, transactions, sheetIds.monthlyId)
     console.log('✅ Evolução mensal com tendências criada!')
     
     // 7. Criar análise de métodos de pagamento
     console.log('💳 Passo 7: Criando análise de métodos de pagamento...')
-    await createPaymentMethodAnalysis(accessToken, existingSheetId, transactions, sheetIds.paymentId)
+    await createPaymentMethodAnalysis(accessToken, targetSpreadsheetId, transactions, sheetIds.paymentId)
     console.log('✅ Análise de métodos de pagamento criada!')
     
     // 8. Formatar tudo e criar gráficos automatizados
     console.log('🎨 Passo 8: Formatando e criando gráficos automatizados...')
-    await formatAndCreateAutomatedCharts(accessToken, existingSheetId, sheetIds, transactions)
+    await formatAndCreateAutomatedCharts(accessToken, targetSpreadsheetId, sheetIds, transactions)
     console.log('✅ Formatação e gráficos automatizados aplicados!')
 
     console.log('🎉 Dashboard completo criado com sucesso!')
@@ -79,8 +80,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        spreadsheetId: existingSheetId,
-        url: `https://docs.google.com/spreadsheets/d/${existingSheetId}`,
+        spreadsheetId: targetSpreadsheetId,
+        url: `https://docs.google.com/spreadsheets/d/${targetSpreadsheetId}`,
         message: 'Dashboard financeiro completo criado com sucesso! 🎉'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

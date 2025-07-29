@@ -28,6 +28,7 @@ interface GoogleSheetsIntegrationProps {
 export const GoogleSheetsIntegration = ({ transactions }: GoogleSheetsIntegrationProps) => {
   const [loading, setLoading] = useState(false);
   const [spreadsheetId, setSpreadsheetId] = useState('');
+  const [targetSpreadsheetId, setTargetSpreadsheetId] = useState('');
   const [spreadsheetUrl, setSpreadsheetUrl] = useState('');
   const [isConfigured, setIsConfigured] = useState(false);
 
@@ -38,7 +39,8 @@ export const GoogleSheetsIntegration = ({ transactions }: GoogleSheetsIntegratio
       const { data, error } = await supabase.functions.invoke('google-sheets-integration', {
         body: { 
           action: 'create_complete_dashboard',
-          transactions 
+          transactions,
+          spreadsheetId: targetSpreadsheetId 
         }
       });
 
@@ -224,6 +226,19 @@ export const GoogleSheetsIntegration = ({ transactions }: GoogleSheetsIntegratio
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="targetSpreadsheetId">ID da sua planilha (opcional)</Label>
+              <Input
+                id="targetSpreadsheetId"
+                placeholder="Cole o ID da planilha onde criar o dashboard"
+                value={targetSpreadsheetId}
+                onChange={(e) => setTargetSpreadsheetId(e.target.value)}
+              />
+              <p className="text-xs text-gray-600">
+                Deixe vazio para criar uma nova planilha ou cole o ID da planilha existente
+              </p>
+            </div>
+
             <Button
               onClick={createCompleteDashboard}
               disabled={loading || transactions.length === 0}

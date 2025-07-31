@@ -1,7 +1,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.6a30b8dba47e48deab01b3c0a8a2d9f1',
+  appId: 'com.lovable.pdftosheetsfinances',
   appName: 'pdf-to-sheets-finances',
   webDir: 'dist',
   server: {

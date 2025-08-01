@@ -66,7 +66,11 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
       {/* Resumo Executivo */}
       <Card className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white border-0 shadow-xl">
         <CardHeader>
-          <CardTitle className="text-2xl">💼 Resumo Executivo - {new Date(latestMonth + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</CardTitle>
+          <CardTitle className="text-2xl">💼 Resumo Executivo - {(() => {
+            const [year, month] = latestMonth.split('-');
+            const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+            return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+          })()}</CardTitle>
           <CardDescription className="text-indigo-100">
             Visão geral da sua situação financeira atual
           </CardDescription>

@@ -72,6 +72,16 @@ export const BudgetPlanner = ({ transactions }: BudgetPlannerProps) => {
   const actualExpenses = currentMonthExpenses.reduce((acc, transaction) => {
     const mappedCategory = mapTransactionToCategory(transaction.description, transaction.category);
     
+    // Debug: log das primeiras transações para ver o mapeamento
+    if (Object.keys(acc).length < 5) {
+      console.log('Mapeamento:', {
+        original: transaction.description,
+        originalCategory: transaction.category,
+        mapped: mappedCategory,
+        amount: transaction.amount
+      });
+    }
+    
     if (!acc[mappedCategory]) {
       acc[mappedCategory] = 0;
     }

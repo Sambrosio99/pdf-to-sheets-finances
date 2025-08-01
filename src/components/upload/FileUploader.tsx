@@ -55,27 +55,46 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
 
   // Função para formatar data corretamente
   const formatDate = (dateStr: string): string => {
-    console.log("Formatando data:", dateStr);
+    console.log("🔧 Formatando data:", dateStr);
+    
+    // Limpar espaços e caracteres especiais
+    const cleanDate = dateStr.trim();
     
     // Se já está no formato YYYY-MM-DD, retorna direto
-    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      console.log("Data já no formato correto:", dateStr);
-      return dateStr;
+    if (cleanDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      console.log("✅ Data já no formato correto:", cleanDate);
+      return cleanDate;
     }
     
     // Se está no formato DD/MM/YYYY, converte
-    if (dateStr.includes('/')) {
-      const parts = dateStr.split('/');
+    if (cleanDate.includes('/')) {
+      const parts = cleanDate.split('/');
       if (parts.length === 3) {
-        const [day, month, year] = parts;
+        let [day, month, year] = parts;
+        
+        // Garantir que o ano seja 4 dígitos
+        if (year.length === 2) {
+          const currentYear = new Date().getFullYear();
+          const currentCentury = Math.floor(currentYear / 100) * 100;
+          year = currentCentury.toString() + year;
+        }
+        
         const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-        console.log("Convertido DD/MM/YYYY para:", formattedDate);
+        console.log("🔄 Convertido DD/MM/YYYY para:", formattedDate);
         return formattedDate;
       }
     }
     
-    console.log("Formato de data não reconhecido:", dateStr);
-    return dateStr;
+    // Se está no formato YYYY-MM-DD mas com barras
+    if (cleanDate.match(/^\d{4}\/\d{1,2}\/\d{1,2}$/)) {
+      const [year, month, day] = cleanDate.split('/');
+      const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      console.log("🔄 Convertido YYYY/MM/DD para:", formattedDate);
+      return formattedDate;
+    }
+    
+    console.log("❌ Formato de data não reconhecido:", cleanDate);
+    return cleanDate;
   };
 
   // Função para extrair CSV line com aspas

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,6 +53,53 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     return 'Outros';
   };
 
+  // Função para formatar data corretamente
+  const formatDate = (dateStr: string): string => {
+    console.log("Formatando data:", dateStr);
+    
+    // Se já está no formato YYYY-MM-DD, retorna direto
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      console.log("Data já no formato correto:", dateStr);
+      return dateStr;
+    }
+    
+    // Se está no formato DD/MM/YYYY, converte
+    if (dateStr.includes('/')) {
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        const [day, month, year] = parts;
+        const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        console.log("Convertido DD/MM/YYYY para:", formattedDate);
+        return formattedDate;
+      }
+    }
+    
+    console.log("Formato de data não reconhecido:", dateStr);
+    return dateStr;
+  };
+
+  // Função para extrair CSV line com aspas
+  const parseCSVLine = (line: string): string[] => {
+    const columns: string[] = [];
+    let currentColumn = '';
+    let insideQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        insideQuotes = !insideQuotes;
+      } else if (char === ',' && !insideQuotes) {
+        columns.push(currentColumn.trim().replace(/^"|"$/g, ''));
+        currentColumn = '';
+      } else {
+        currentColumn += char;
+      }
+    }
+    columns.push(currentColumn.trim().replace(/^"|"$/g, ''));
+    return columns;
+  };
+
   // Função específica para processar FATURAS DE CARTÃO DE CRÉDITO
   const extractCreditCardData = async (file: File): Promise<Omit<Transaction, 'id'>[]> => {
     console.log("🔴 PROCESSANDO FATURA DE CARTÃO:", file.name);
@@ -70,7 +116,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
           const dataLines = lines.length > 0 && lines[0].toLowerCase().includes('data') ? lines.slice(1) : lines;
           
           for (const line of dataLines) {
-            const columns = line.split(',').map(col => col.trim().replace(/^"|"$/g, ''));
+            const columns = parseCSVLine(line);
             
             if (columns.length >= 3) {
               const [dateStr, description, valueStr] = columns;
@@ -78,9 +124,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
               
               if (!isNaN(amount) && amount > 0 && dateStr && description) {
                 transactions.push({
-                  date: dateStr.includes('/') 
-                    ? dateStr.split('/').reverse().join('-')  // DD/MM/YYYY -> YYYY-MM-DD
-                    : dateStr, // Já em formato YYYY-MM-DD
+                  date: formatDate(dateStr), // 🔧 USAR FUNÇÃO DE FORMATAÇÃO CORRETA
                   description: description.trim(),
                   category: categorizeTransaction(description),
                   paymentMethod: 'Cartão de Crédito', // 🔴 SEMPRE cartão de crédito para faturas
@@ -141,23 +185,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
             const line = dataLines[i];
             
             // Split considerando que pode haver vírgulas dentro das aspas
-            const columns: string[] = [];
-            let currentColumn = '';
-            let insideQuotes = false;
-            
-            for (let j = 0; j < line.length; j++) {
-              const char = line[j];
-              
-              if (char === '"') {
-                insideQuotes = !insideQuotes;
-              } else if (char === ',' && !insideQuotes) {
-                columns.push(currentColumn.trim().replace(/^"|"$/g, ''));
-                currentColumn = '';
-              } else {
-                currentColumn += char;
-              }
-            }
-            columns.push(currentColumn.trim().replace(/^"|"$/g, ''));
+            const columns = parseCSVLine(line);
             
             console.log(`Linha ${i + 1}:`, columns);
             
@@ -166,8 +194,8 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
               if (columns.length === 3) {
                 const [dateStr, description, valueStr] = columns;
                 
-                // Converter data de YYYY-MM-DD (Nubank) para YYYY-MM-DD
-                const formattedDate = dateStr; // Nubank já vem no formato correto
+                // Usar função de formatação de data consistente
+                const formattedDate = formatDate(dateStr);
                 
                 // Converter valor
                 const numericValue = parseFloat(valueStr.replace(',', '.'));
@@ -198,38 +226,32 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
               else if (columns.length >= 4) {
                 const [dateStr, valueStr, identifier, description] = columns;
                 
-                // Converter data de DD/MM/YYYY para YYYY-MM-DD
-                const dateParts = dateStr.split('/');
-                if (dateParts.length === 3) {
-                  const [day, month, year] = dateParts;
-                  const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                // Usar função de formatação de data consistente
+                const formattedDate = formatDate(dateStr);
                   
-                  // Converter valor
-                  const numericValue = parseFloat(valueStr.replace(',', '.'));
-                  const amount = Math.abs(numericValue);
-                  const transactionType = numericValue >= 0 ? 'income' : 'expense';
-                  
-                  // Categorizar automaticamente
-                  const category = categorizeTransaction(description);
-                  const paymentMethod = getPaymentMethod(description);
-                  
-                  console.log(`Processando tradicional: Data=${formattedDate}, Valor=${amount}, Tipo=${transactionType}, Categoria=${category}`);
-                  
-                  if (!isNaN(amount) && amount > 0 && dateStr && description) {
-                    transactions.push({
-                      date: formattedDate,
-                      description: description.trim(),
-                      category: category,
-                      paymentMethod: paymentMethod,
-                      amount: amount,
-                      type: transactionType,
-                      status: 'paid'
-                    });
-                  } else {
-                    console.log(`Linha ${i + 1} ignorada - dados inválidos`);
-                  }
+                // Converter valor
+                const numericValue = parseFloat(valueStr.replace(',', '.'));
+                const amount = Math.abs(numericValue);
+                const transactionType = numericValue >= 0 ? 'income' : 'expense';
+                
+                // Categorizar automaticamente
+                const category = categorizeTransaction(description);
+                const paymentMethod = getPaymentMethod(description);
+                
+                console.log(`Processando tradicional: Data=${formattedDate}, Valor=${amount}, Tipo=${transactionType}, Categoria=${category}`);
+                
+                if (!isNaN(amount) && amount > 0 && dateStr && description) {
+                  transactions.push({
+                    date: formattedDate,
+                    description: description.trim(),
+                    category: category,
+                    paymentMethod: paymentMethod,
+                    amount: amount,
+                    type: transactionType,
+                    status: 'paid'
+                  });
                 } else {
-                  console.log(`Linha ${i + 1} ignorada - formato de data inválido`);
+                  console.log(`Linha ${i + 1} ignorada - dados inválidos`);
                 }
               }
             } else {

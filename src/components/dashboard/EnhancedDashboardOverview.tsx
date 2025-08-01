@@ -22,10 +22,16 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
   useEffect(() => {
     setFilteredTransactions(transactions);
   }, [transactions]);
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  // Encontrar o mês mais recente nas transações
+  const latestMonth = filteredTransactions.length > 0 
+    ? filteredTransactions
+        .map(t => t.date.slice(0, 7))
+        .sort()
+        .reverse()[0]
+    : new Date().toISOString().slice(0, 7);
   
   const currentMonthTransactions = filteredTransactions.filter(t => 
-    t.date.startsWith(currentMonth)
+    t.date.startsWith(latestMonth)
   );
 
   const totalIncome = currentMonthTransactions
@@ -37,10 +43,16 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
   const balance = totalIncome - totalExpenses;
-  const monthlyIncome = 1682; // Salário fixo
-  const fixedExpenses = 638; // Faculdade + Celular + Academia
-  const availableIncome = monthlyIncome - fixedExpenses;
-  const spendingRate = ((totalExpenses - fixedExpenses) / availableIncome) * 100;
+  
+  // Calcular gastos fixos baseado nas categorias de despesas recorrentes
+  const fixedCategories = ['Educação', 'Telefone/Internet', 'Academias/Esportes'];
+  const fixedExpenses = currentMonthTransactions
+    .filter(t => t.type === 'expense' && fixedCategories.includes(t.category))
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+  
+  const availableIncome = totalIncome - fixedExpenses;
+  const variableExpenses = totalExpenses - fixedExpenses;
+  const spendingRate = availableIncome > 0 ? (variableExpenses / availableIncome) * 100 : 0;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -54,7 +66,7 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
       {/* Resumo Executivo */}
       <Card className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white border-0 shadow-xl">
         <CardHeader>
-          <CardTitle className="text-2xl">💼 Resumo Executivo - {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</CardTitle>
+          <CardTitle className="text-2xl">💼 Resumo Executivo - {new Date(latestMonth + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</CardTitle>
           <CardDescription className="text-indigo-100">
             Visão geral da sua situação financeira atual
           </CardDescription>
@@ -62,8 +74,8 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div className="text-center">
-              <p className="text-sm opacity-90">Salário Mensal</p>
-              <p className="text-2xl font-bold">{formatCurrency(monthlyIncome)}</p>
+              <p className="text-sm opacity-90">Receita Total</p>
+              <p className="text-2xl font-bold">{formatCurrency(totalIncome)}</p>
             </div>
             <div className="text-center">
               <p className="text-sm opacity-90">Gastos Fixos</p>

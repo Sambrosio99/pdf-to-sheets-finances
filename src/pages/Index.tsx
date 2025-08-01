@@ -10,6 +10,7 @@ import { BudgetPlanner } from "@/components/budget/BudgetPlanner";
 import { FileUploader } from "@/components/upload/FileUploader";
 import { GoogleSheetsExport } from "@/components/export/GoogleSheetsExport";
 import { GoogleSheetsIntegration } from "@/components/export/GoogleSheetsIntegration";
+import { PasswordChangeForm } from "@/components/auth/PasswordChangeForm";
 import { useAuth } from "@/hooks/useAuth";
 import { useTransactions } from "@/hooks/useTransactions";
 import { LogOut, Wallet } from "lucide-react";
@@ -73,7 +74,7 @@ export default function Index() {
         </Card>
 
         <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-6 h-auto p-1 bg-white/50 backdrop-blur-sm">
+          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-7 h-auto p-1 bg-white/50 backdrop-blur-sm">
             <TabsTrigger value="dashboard" className="data-[state=active]:bg-indigo-500 data-[state=active]:text-white">
               📊 Dashboard
             </TabsTrigger>
@@ -91,6 +92,9 @@ export default function Index() {
             </TabsTrigger>
             <TabsTrigger value="sheets" className="data-[state=active]:bg-emerald-500 data-[state=active]:text-white">
               📊 Google Sheets
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="data-[state=active]:bg-red-500 data-[state=active]:text-white">
+              ⚙️ Configurações
             </TabsTrigger>
           </TabsList>
 
@@ -154,6 +158,10 @@ export default function Index() {
 
           <TabsContent value="sheets" className="space-y-6">
             <GoogleSheetsIntegration transactions={transactions} />
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-6">
+            <PasswordChangeForm />
           </TabsContent>
         </Tabs>
       </div>

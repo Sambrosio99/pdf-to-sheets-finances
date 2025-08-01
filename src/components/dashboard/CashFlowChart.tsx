@@ -36,10 +36,11 @@ export const CashFlowChart = ({ transactions }: CashFlowChartProps) => {
     .sort((a: any, b: any) => a.month.localeCompare(b.month))
     .map((data: any) => ({
       ...data,
-      monthName: new Date(data.month + '-01').toLocaleDateString('pt-BR', { 
-        month: 'short', 
-        year: '2-digit' 
-      })
+      monthName: (() => {
+        const [year, monthNum] = data.month.split('-');
+        const date = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
+        return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      })()
     }));
 
   const formatCurrency = (value: number) => {

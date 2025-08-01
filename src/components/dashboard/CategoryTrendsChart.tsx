@@ -73,10 +73,11 @@ export const CategoryTrendsChart = ({ transactions }: CategoryTrendsChartProps) 
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, categories]) => ({
       month,
-      monthName: new Date(month + '-01').toLocaleDateString('pt-BR', { 
-        month: 'short',
-        year: '2-digit'
-      }),
+      monthName: (() => {
+        const [year, monthNum] = month.split('-');
+        const date = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
+        return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      })(),
       ...top5Categories.reduce((acc, category) => ({
         ...acc,
         [category]: categories[category] || 0

@@ -83,9 +83,9 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                     : dateStr, // Já em formato YYYY-MM-DD
                   description: description.trim(),
                   category: categorizeTransaction(description),
-                  paymentMethod: 'Cartão de Crédito', // SEMPRE cartão para faturas
+                  paymentMethod: 'Cartão de Crédito', // 🔴 SEMPRE cartão de crédito para faturas
                   amount: amount,
-                  type: 'expense', // SEMPRE despesa para faturas
+                  type: 'expense', // 🔴 SEMPRE despesa para faturas
                   status: 'paid'
                 });
               }
@@ -457,12 +457,12 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
             <AlertDescription>
               <strong>Sistema otimizado para múltiplos formatos:</strong>
               <ul className="mt-2 space-y-1 text-sm">
+                <li>🔴 <strong>Faturas de Cartão:</strong> Arquivos com "fatura" ou "cartao" no nome → SEMPRE "Cartão de Crédito"</li>
+                <li>🟢 <strong>Extratos Bancários:</strong> Outros arquivos → Detecta automaticamente o método de pagamento</li>
                 <li>✅ <strong>Nubank CSV:</strong> date, title, amount (formato detectado automaticamente)</li>
                 <li>✅ <strong>CSV bancário tradicional:</strong> Data, Valor, Identificador, Descrição</li>
                 <li>✅ <strong>Categorização inteligente:</strong> Nubank, Transporte, Alimentação, PIX, etc.</li>
-                <li>✅ <strong>Detecção automática:</strong> Receitas e Despesas por formato</li>
-                <li>✅ <strong>Suporte a formatos de data:</strong> YYYY-MM-DD (Nubank) e DD/MM/YYYY</li>
-                <li>✅ <strong>Mapeamento específico:</strong> Vivo→Celular, Wellhub→Academia, PUC→Faculdade</li>
+                <li>✅ <strong>Anti-duplicatas:</strong> Sistema evita importação de transações já existentes</li>
               </ul>
             </AlertDescription>
           </Alert>

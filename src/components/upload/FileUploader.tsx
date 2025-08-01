@@ -54,6 +54,54 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     return 'Outros';
   };
 
+  // Função específica para processar FATURAS DE CARTÃO DE CRÉDITO
+  const extractCreditCardData = async (file: File): Promise<Omit<Transaction, 'id'>[]> => {
+    console.log("🔴 PROCESSANDO FATURA DE CARTÃO:", file.name);
+    
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string;
+          const lines = text.split('\n').filter(line => line.trim());
+          const transactions: Omit<Transaction, 'id'>[] = [];
+          
+          // Pular cabeçalho se existir
+          const dataLines = lines.length > 0 && lines[0].toLowerCase().includes('data') ? lines.slice(1) : lines;
+          
+          for (const line of dataLines) {
+            const columns = line.split(',').map(col => col.trim().replace(/^"|"$/g, ''));
+            
+            if (columns.length >= 3) {
+              const [dateStr, description, valueStr] = columns;
+              const amount = Math.abs(parseFloat(valueStr.replace(',', '.')));
+              
+              if (!isNaN(amount) && amount > 0 && dateStr && description) {
+                transactions.push({
+                  date: dateStr.includes('/') 
+                    ? dateStr.split('/').reverse().join('-')  // DD/MM/YYYY -> YYYY-MM-DD
+                    : dateStr, // Já em formato YYYY-MM-DD
+                  description: description.trim(),
+                  category: categorizeTransaction(description),
+                  paymentMethod: 'Cartão de Crédito', // SEMPRE cartão para faturas
+                  amount: amount,
+                  type: 'expense', // SEMPRE despesa para faturas
+                  status: 'paid'
+                });
+              }
+            }
+          }
+          
+          console.log(`🔴 FATURA: ${transactions.length} gastos extraídos`);
+          resolve(transactions);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.readAsText(file, 'UTF-8');
+    });
+  };
+
   // Função melhorada para extrair dados de CSV
   const extractDataFromCSV = async (file: File): Promise<Omit<Transaction, 'id'>[]> => {
     console.log("Processando arquivo CSV:", file.name);
@@ -260,7 +308,18 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
               }
             ];
           } else {
-            transactions = await extractDataFromCSV(file);
+            // Detectar se é fatura de cartão ou extrato bancário pelo nome do arquivo
+            const isCreditCardBill = file.name.toLowerCase().includes('fatura') || 
+                                   file.name.toLowerCase().includes('cartao') ||
+                                   file.name.toLowerCase().includes('invoice');
+            
+            if (isCreditCardBill) {
+              console.log("🔴 PROCESSANDO COMO FATURA DE CARTÃO");
+              transactions = await extractCreditCardData(file);
+            } else {
+              console.log("🟢 PROCESSANDO COMO EXTRATO BANCÁRIO");
+              transactions = await extractDataFromCSV(file);
+            }
           }
           
           allTransactions.push(...transactions);

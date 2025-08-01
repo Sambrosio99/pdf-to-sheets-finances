@@ -9,7 +9,8 @@ import { TransactionList } from "@/components/transactions/TransactionList";
 import { BudgetPlanner } from "@/components/budget/BudgetPlanner";
 import { FileUploader } from "@/components/upload/FileUploader";
 import { GoogleSheetsExport } from "@/components/export/GoogleSheetsExport";
-import { YearlyReport } from "@/components/reports/YearlyReport";
+import { AdvancedReports } from "@/components/reports/AdvancedReports";
+import { PeriodComparison } from "@/components/reports/PeriodComparison";
 import { PasswordChangeForm } from "@/components/auth/PasswordChangeForm";
 import { useAuth } from "@/hooks/useAuth";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -166,7 +167,8 @@ export default function Index() {
           </TabsContent>
 
           <TabsContent value="reports" className="space-y-6">
-            <YearlyReport transactions={transactions} />
+            <AdvancedReports transactions={transactions} />
+            <PeriodComparison transactions={transactions} />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">

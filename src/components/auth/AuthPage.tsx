@@ -14,15 +14,25 @@ import { supabase } from '@/integrations/supabase/client';
 export const AuthPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user) {
+    // Verifica se há parâmetros de recuperação de senha na URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const accessToken = urlParams.get('access_token');
+    const type = urlParams.get('type');
+    
+    if (accessToken && type === 'recovery') {
+      setShowResetPassword(true);
+    } else if (user && !showResetPassword) {
       navigate('/');
     }
-  }, [user, navigate]);
+  }, [user, navigate, showResetPassword]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +72,7 @@ export const AuthPage = () => {
     
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/`
+      redirectTo: `${window.location.origin}/auth`
     });
     
     if (error) {
@@ -73,6 +83,88 @@ export const AuthPage = () => {
     
     setLoading(false);
   };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      toast.error('As senhas não coincidem');
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      toast.error('A senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+    
+    setLoading(true);
+    
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+    
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Senha alterada com sucesso!');
+      setShowResetPassword(false);
+      navigate('/');
+    }
+    
+    setLoading(false);
+  };
+
+  if (showResetPassword) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-white/70 backdrop-blur-sm border-0 shadow-lg">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">
+              Trocar Senha
+            </CardTitle>
+            <CardDescription>
+              Digite sua nova senha
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handlePasswordReset} className="space-y-4">
+              <div>
+                <Label htmlFor="new-password">Nova Senha</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  className="bg-white/50"
+                  placeholder="Mínimo 6 caracteres"
+                />
+              </div>
+              <div>
+                <Label htmlFor="confirm-password">Confirmar Nova Senha</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  className="bg-white/50"
+                  placeholder="Digite a senha novamente"
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-600"
+                disabled={loading}
+              >
+                {loading ? 'Alterando...' : 'Alterar Senha'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">

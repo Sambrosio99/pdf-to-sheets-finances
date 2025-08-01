@@ -143,11 +143,18 @@ export default function Index() {
               <CardContent>
                 <FileUploader
                   onDataExtracted={async (transactions) => {
+                    console.log('Index.tsx: Recebendo transações do uploader:', {
+                      count: transactions.length,
+                      sample: transactions[0]
+                    });
+                    
                     setIsUploading(true);
                     await addMultipleTransactions(transactions);
                     // Força atualização dos dados
                     await refetch();
                     setIsUploading(false);
+                    
+                    console.log('Index.tsx: Processo de upload finalizado');
                   }}
                 />
               </CardContent>

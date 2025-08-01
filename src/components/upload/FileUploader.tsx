@@ -154,15 +154,18 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("Evento de upload disparado");
+    console.log("FileUploader: Evento de upload disparado");
     const files = event.target.files;
     
     if (!files || files.length === 0) {
-      console.log("Nenhum arquivo selecionado");
+      console.log("FileUploader: Nenhum arquivo selecionado");
       return;
     }
 
-    console.log("Arquivos selecionados:", files.length);
+    console.log("FileUploader: Arquivos selecionados:", {
+      count: files.length,
+      files: Array.from(files).map(f => ({ name: f.name, type: f.type, size: f.size }))
+    });
     setIsUploading(true);
     
     try {

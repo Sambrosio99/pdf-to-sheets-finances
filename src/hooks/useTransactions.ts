@@ -72,6 +72,12 @@ export const useTransactions = () => {
 
   const addMultipleTransactions = async (transactionList: Omit<Transaction, 'id'>[]) => {
     try {
+      console.log('useTransactions: Iniciando adição de múltiplas transações:', {
+        count: transactionList.length,
+        user: user?.id,
+        firstTransaction: transactionList[0]
+      });
+
       const transactionsToInsert = transactionList.map(transaction => ({
         user_id: user?.id,
         date: transaction.date,
@@ -83,17 +89,31 @@ export const useTransactions = () => {
         status: transaction.status
       }));
 
-      const { error } = await supabase
-        .from('transactions')
-        .insert(transactionsToInsert);
+      console.log('useTransactions: Dados preparados para inserção:', {
+        sampleData: transactionsToInsert[0],
+        totalCount: transactionsToInsert.length
+      });
 
-      if (error) throw error;
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert(transactionsToInsert)
+        .select();
+
+      if (error) {
+        console.error('useTransactions: Erro do Supabase:', error);
+        throw error;
+      }
+
+      console.log('useTransactions: Inserção bem-sucedida:', {
+        insertedCount: data?.length || 0,
+        data: data
+      });
 
       await fetchTransactions();
       toast.success(`${transactionList.length} transações adicionadas com sucesso!`);
     } catch (error) {
-      console.error('Error adding multiple transactions:', error);
-      toast.error('Erro ao adicionar transações em lote');
+      console.error('useTransactions: Erro ao adicionar múltiplas transações:', error);
+      toast.error(`Erro ao adicionar transações em lote: ${error.message}`);
     }
   };
 

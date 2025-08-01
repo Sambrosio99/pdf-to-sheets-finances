@@ -20,6 +20,16 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
   const categorizeTransaction = (description: string): string => {
     const desc = description.toLowerCase();
     
+    // Nubank específicos
+    if (desc.includes('google') || desc.includes('chatgpt') || desc.includes('marvel')) return 'Assinaturas';
+    if (desc.includes('vivo') || desc.includes('conta vivo') || desc.includes('recvivo')) return 'Celular';
+    if (desc.includes('wellhub') || desc.includes('academia') || desc.includes('gym')) return 'Academia';
+    if (desc.includes('sociedade mineira de cultura') || desc.includes('puc') || desc.includes('faculdade') || desc.includes('universidade')) return 'Faculdade';
+    if (desc.includes('lovable') || desc.includes('aliexpress') || desc.includes('amazon')) return 'Compras';
+    if (desc.includes('pagamento recebido') || desc.includes('estorno')) return 'Transferência Recebida';
+    if (desc.includes('iof') || desc.includes('juros') || desc.includes('multa')) return 'Taxas e Juros';
+    
+    // Gerais
     if (desc.includes('uber') || desc.includes('trip')) return 'Transporte';
     if (desc.includes('cafe') || desc.includes('lanche') || desc.includes('pastel') || desc.includes('supermercado')) return 'Alimentação';
     if (desc.includes('transferência recebida') || desc.includes('transferência') && desc.includes('recebida')) return 'Transferência Recebida';
@@ -64,11 +74,14 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
 
           const transactions: Omit<Transaction, 'id'>[] = [];
           
-          // Verificar se primeira linha é cabeçalho
+          // Verificar se primeira linha é cabeçalho (formato tradicional ou Nubank)
           const firstLine = lines[0];
-          const hasHeader = firstLine.toLowerCase().includes('data') && 
+          const hasHeader = (firstLine.toLowerCase().includes('data') && 
                            firstLine.toLowerCase().includes('valor') && 
-                           firstLine.toLowerCase().includes('descrição');
+                           firstLine.toLowerCase().includes('descrição')) ||
+                          (firstLine.toLowerCase().includes('date') &&
+                           firstLine.toLowerCase().includes('title') &&
+                           firstLine.toLowerCase().includes('amount'));
           
           console.log("Primeira linha:", firstLine);
           console.log("Tem cabeçalho:", hasHeader);
@@ -100,25 +113,24 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
             
             console.log(`Linha ${i + 1}:`, columns);
             
-            if (columns.length >= 4) {
-              const [dateStr, valueStr, identifier, description] = columns;
-              
-              // Converter data de DD/MM/YYYY para YYYY-MM-DD
-              const dateParts = dateStr.split('/');
-              if (dateParts.length === 3) {
-                const [day, month, year] = dateParts;
-                const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            if (columns.length >= 3) {
+              // Formato Nubank: date, title, amount (3 colunas)
+              if (columns.length === 3) {
+                const [dateStr, description, valueStr] = columns;
+                
+                // Converter data de YYYY-MM-DD (Nubank) para YYYY-MM-DD
+                const formattedDate = dateStr; // Nubank já vem no formato correto
                 
                 // Converter valor
                 const numericValue = parseFloat(valueStr.replace(',', '.'));
                 const amount = Math.abs(numericValue);
-                const transactionType = numericValue >= 0 ? 'income' : 'expense';
+                const transactionType = numericValue >= 0 ? 'expense' : 'income'; // Nubank: positivo = gasto, negativo = recebimento
                 
                 // Categorizar automaticamente
                 const category = categorizeTransaction(description);
                 const paymentMethod = getPaymentMethod(description);
                 
-                console.log(`Processando: Data=${formattedDate}, Valor=${amount}, Tipo=${transactionType}, Categoria=${category}`);
+                console.log(`Processando Nubank: Data=${formattedDate}, Valor=${amount}, Tipo=${transactionType}, Categoria=${category}, Descrição=${description}`);
                 
                 if (!isNaN(amount) && amount > 0 && dateStr && description) {
                   transactions.push({
@@ -133,11 +145,47 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                 } else {
                   console.log(`Linha ${i + 1} ignorada - dados inválidos`);
                 }
-              } else {
-                console.log(`Linha ${i + 1} ignorada - formato de data inválido`);
+              }
+              // Formato bancário tradicional: Data, Valor, Identificador, Descrição (4 colunas)
+              else if (columns.length >= 4) {
+                const [dateStr, valueStr, identifier, description] = columns;
+                
+                // Converter data de DD/MM/YYYY para YYYY-MM-DD
+                const dateParts = dateStr.split('/');
+                if (dateParts.length === 3) {
+                  const [day, month, year] = dateParts;
+                  const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                  
+                  // Converter valor
+                  const numericValue = parseFloat(valueStr.replace(',', '.'));
+                  const amount = Math.abs(numericValue);
+                  const transactionType = numericValue >= 0 ? 'income' : 'expense';
+                  
+                  // Categorizar automaticamente
+                  const category = categorizeTransaction(description);
+                  const paymentMethod = getPaymentMethod(description);
+                  
+                  console.log(`Processando tradicional: Data=${formattedDate}, Valor=${amount}, Tipo=${transactionType}, Categoria=${category}`);
+                  
+                  if (!isNaN(amount) && amount > 0 && dateStr && description) {
+                    transactions.push({
+                      date: formattedDate,
+                      description: description.trim(),
+                      category: category,
+                      paymentMethod: paymentMethod,
+                      amount: amount,
+                      type: transactionType,
+                      status: 'paid'
+                    });
+                  } else {
+                    console.log(`Linha ${i + 1} ignorada - dados inválidos`);
+                  }
+                } else {
+                  console.log(`Linha ${i + 1} ignorada - formato de data inválido`);
+                }
               }
             } else {
-              console.log(`Linha ${i + 1} ignorada - colunas insuficientes (${columns.length})`);
+              console.log(`Linha ${i + 1} ignorada - colunas insuficientes (${columns.length}) - necessário pelo menos 3 colunas`);
             }
           }
           
@@ -348,13 +396,14 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Sistema otimizado para o seu formato:</strong>
+              <strong>Sistema otimizado para múltiplos formatos:</strong>
               <ul className="mt-2 space-y-1 text-sm">
-                <li>✅ <strong>CSV bancário:</strong> Data, Valor, Identificador, Descrição</li>
-                <li>✅ <strong>Categorização automática:</strong> Transporte, Alimentação, PIX, etc.</li>
-                <li>✅ <strong>Detecção automática:</strong> Receitas (valores positivos) e Despesas (valores negativos)</li>
-                <li>✅ <strong>Formato de data:</strong> DD/MM/YYYY</li>
-                <li>✅ <strong>Identificação de método:</strong> PIX, Débito, Crédito, Boleto</li>
+                <li>✅ <strong>Nubank CSV:</strong> date, title, amount (formato detectado automaticamente)</li>
+                <li>✅ <strong>CSV bancário tradicional:</strong> Data, Valor, Identificador, Descrição</li>
+                <li>✅ <strong>Categorização inteligente:</strong> Nubank, Transporte, Alimentação, PIX, etc.</li>
+                <li>✅ <strong>Detecção automática:</strong> Receitas e Despesas por formato</li>
+                <li>✅ <strong>Suporte a formatos de data:</strong> YYYY-MM-DD (Nubank) e DD/MM/YYYY</li>
+                <li>✅ <strong>Mapeamento específico:</strong> Vivo→Celular, Wellhub→Academia, PUC→Faculdade</li>
               </ul>
             </AlertDescription>
           </Alert>

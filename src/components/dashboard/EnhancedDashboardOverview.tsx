@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Transaction } from "@/types/finance";
 import { TrendingUp, TrendingDown, DollarSign, PieChart, AlertCircle, Target } from "lucide-react";
@@ -17,6 +17,11 @@ interface EnhancedDashboardOverviewProps {
 
 export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOverviewProps) => {
   const [filteredTransactions, setFilteredTransactions] = useState(transactions);
+  
+  // Atualizar filteredTransactions quando transactions mudarem
+  useEffect(() => {
+    setFilteredTransactions(transactions);
+  }, [transactions]);
   const currentMonth = new Date().toISOString().slice(0, 7);
   
   const currentMonthTransactions = filteredTransactions.filter(t => 

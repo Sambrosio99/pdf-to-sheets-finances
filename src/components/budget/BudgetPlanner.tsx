@@ -22,21 +22,48 @@ export const BudgetPlanner = ({ transactions }: BudgetPlannerProps) => {
     'Faculdade': 509, // Gasto fixo conhecido
     'Celular': 40,    // Gasto fixo conhecido
     'Academia': 89,   // Gasto fixo conhecido
-    'Alimentação': 400, // Estimativa baseada na renda
     'Transporte': 200,
     'Investimentos': 300, // 20% da renda para reserva + investimentos
     'Baixo Musical': 150, // Valor mensal para a meta do baixo
-    'Lazer': 200,
     'Compras Pessoais': 150, // Roupas, fones, bonés etc
     'Outros': 100
   };
 
-  // Calcular gastos reais por categoria
-  const actualExpenses = currentMonthExpenses.reduce((acc, transaction) => {
-    if (!acc[transaction.category]) {
-      acc[transaction.category] = 0;
+  // Função para mapear descrições para categorias
+  const mapTransactionToCategory = (description: string, originalCategory: string): string => {
+    const desc = description.toLowerCase();
+    
+    if (desc.includes('puc') || desc.includes('faculdade') || desc.includes('universidade')) {
+      return 'Faculdade';
     }
-    acc[transaction.category] += transaction.amount;
+    if (desc.includes('wellhub') || desc.includes('academia') || desc.includes('gym')) {
+      return 'Academia';
+    }
+    if (desc.includes('vivo') || desc.includes('telefone') || desc.includes('celular')) {
+      return 'Celular';
+    }
+    if (desc.includes('uber') || desc.includes('transporte') || desc.includes('taxi') || desc.includes('passagem')) {
+      return 'Transporte';
+    }
+    if (desc.includes('rdb') || desc.includes('investimento') || desc.includes('aplicação') || desc.includes('poupança')) {
+      return 'Investimentos';
+    }
+    if (desc.includes('baixo') || desc.includes('instrumento') || desc.includes('música')) {
+      return 'Baixo Musical';
+    }
+    
+    // Se não encontrar correspondência, usar a categoria original
+    return originalCategory;
+  };
+
+  // Calcular gastos reais por categoria com mapeamento automático
+  const actualExpenses = currentMonthExpenses.reduce((acc, transaction) => {
+    const mappedCategory = mapTransactionToCategory(transaction.description, transaction.category);
+    
+    if (!acc[mappedCategory]) {
+      acc[mappedCategory] = 0;
+    }
+    acc[mappedCategory] += transaction.amount;
     return acc;
   }, {} as Record<string, number>);
 

@@ -12,20 +12,45 @@ export const FinancialGoals = ({ transactions }: FinancialGoalsProps) => {
   const monthlyIncome = 1682; // Salário fixo
   const emergencyGoal = monthlyIncome * 3; // 3 salários para reserva de emergência
   
-  // Calcular total poupado (supondo que investimentos são categorizados como "Investimentos" ou "Poupança")
+  // Função para mapear descrições para categorias (mesma lógica do BudgetPlanner)
+  const mapTransactionToCategory = (description: string, originalCategory: string): string => {
+    const desc = description.toLowerCase();
+    
+    if (desc.includes('rdb') || desc.includes('investimento') || desc.includes('aplicação') || desc.includes('poupança')) {
+      return 'Investimentos';
+    }
+    if (desc.includes('baixo') || desc.includes('instrumento') || desc.includes('música')) {
+      return 'Baixo Musical';
+    }
+    
+    return originalCategory;
+  };
+
+  // Calcular total poupado baseado em mapeamento automático das transações
   const totalSaved = transactions
-    .filter(t => t.type === 'expense' && (
-      t.category.toLowerCase().includes('investimento') || 
-      t.category.toLowerCase().includes('poupança') ||
-      t.category.toLowerCase().includes('reserva')
-    ))
+    .filter(t => t.type === 'expense')
+    .filter(t => {
+      const mappedCategory = mapTransactionToCategory(t.description, t.category);
+      return mappedCategory.toLowerCase().includes('investimentos') || 
+             mappedCategory.toLowerCase().includes('poupança') ||
+             mappedCategory.toLowerCase().includes('reserva');
+    })
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  // Calcular valores específicos para baixo musical
+  const bassSaved = transactions
+    .filter(t => t.type === 'expense')
+    .filter(t => {
+      const mappedCategory = mapTransactionToCategory(t.description, t.category);
+      return mappedCategory.toLowerCase().includes('baixo musical');
+    })
     .reduce((sum, t) => sum + t.amount, 0);
 
   const emergencyProgress = (totalSaved / emergencyGoal) * 100;
   
   // Meta do baixo (estimativa)
   const bassGoal = 2000;
-  const bassProgress = Math.min((totalSaved * 0.3) / bassGoal * 100, 100); // 30% dos investimentos para o baixo
+  const bassProgress = (bassSaved / bassGoal) * 100;
   
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -35,7 +60,7 @@ export const FinancialGoals = ({ transactions }: FinancialGoalsProps) => {
   };
 
   const monthsToEmergencyGoal = Math.ceil((emergencyGoal - totalSaved) / (monthlyIncome * 0.2)); // 20% da renda
-  const monthsToBass = Math.ceil((bassGoal - (totalSaved * 0.3)) / (monthlyIncome * 0.1)); // 10% da renda
+  const monthsToBass = Math.ceil((bassGoal - bassSaved) / (monthlyIncome * 0.1)); // 10% da renda
 
   return (
     <div className="space-y-6">
@@ -108,11 +133,11 @@ export const FinancialGoals = ({ transactions }: FinancialGoalsProps) => {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span>Atual:</span>
-                <span className="font-medium text-purple-600">{formatCurrency(totalSaved * 0.3)}</span>
+                <span className="font-medium text-purple-600">{formatCurrency(bassSaved)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Faltam:</span>
-                <span className="font-medium text-orange-600">{formatCurrency(bassGoal - (totalSaved * 0.3))}</span>
+                <span className="font-medium text-orange-600">{formatCurrency(bassGoal - bassSaved)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Tempo estimado:</span>

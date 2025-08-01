@@ -8,6 +8,32 @@ interface CategoryChartProps {
 }
 
 export const CategoryChart = ({ transactions }: CategoryChartProps) => {
+  // Função para mapear descrições para categorias (mesma lógica dos outros componentes)
+  const mapTransactionToCategory = (description: string, originalCategory: string): string => {
+    const desc = description.toLowerCase();
+    
+    if (desc.includes('puc') || desc.includes('faculdade') || desc.includes('universidade')) {
+      return 'Faculdade';
+    }
+    if (desc.includes('wellhub') || desc.includes('academia') || desc.includes('gym')) {
+      return 'Academia';
+    }
+    if (desc.includes('vivo') || desc.includes('telefone') || desc.includes('celular')) {
+      return 'Celular';
+    }
+    if (desc.includes('uber') || desc.includes('transporte') || desc.includes('taxi') || desc.includes('passagem')) {
+      return 'Transporte';
+    }
+    if (desc.includes('rdb') || desc.includes('investimento') || desc.includes('aplicação') || desc.includes('poupança')) {
+      return 'Investimentos';
+    }
+    if (desc.includes('baixo') || desc.includes('instrumento') || desc.includes('música')) {
+      return 'Baixo Musical';
+    }
+    
+    return originalCategory;
+  };
+
   const expenseTransactions = transactions.filter(t => t.type === 'expense');
   
   // Se não há despesas, mostrar mensagem
@@ -31,10 +57,12 @@ export const CategoryChart = ({ transactions }: CategoryChartProps) => {
   }
   
   const categoryData = expenseTransactions.reduce((acc, transaction) => {
-    if (!acc[transaction.category]) {
-      acc[transaction.category] = 0;
+    const mappedCategory = mapTransactionToCategory(transaction.description, transaction.category);
+    
+    if (!acc[mappedCategory]) {
+      acc[mappedCategory] = 0;
     }
-    acc[transaction.category] += Number(transaction.amount);
+    acc[mappedCategory] += Number(transaction.amount);
     return acc;
   }, {} as Record<string, number>);
 

@@ -25,10 +25,26 @@ export const AuthPage = () => {
     // Verifica se há parâmetros de recuperação de senha na URL
     const urlParams = new URLSearchParams(window.location.search);
     const accessToken = urlParams.get('access_token');
+    const refreshToken = urlParams.get('refresh_token');
     const type = urlParams.get('type');
     
-    if (accessToken && type === 'recovery') {
+    console.log('URL params:', { accessToken, refreshToken, type });
+    
+    if (type === 'recovery' && accessToken) {
+      console.log('Password reset detected');
       setShowResetPassword(true);
+      
+      // Configura a sessão com os tokens do URL
+      supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken || ''
+      }).then(({ error }) => {
+        if (error) {
+          console.error('Error setting session:', error);
+          toast.error('Link de recuperação inválido ou expirado. Solicite um novo.');
+          setShowResetPassword(false);
+        }
+      });
     } else if (user && !showResetPassword) {
       navigate('/');
     }

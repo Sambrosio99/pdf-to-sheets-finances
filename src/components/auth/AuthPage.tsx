@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 export const AuthPage = () => {
   const [email, setEmail] = useState('');
@@ -48,6 +49,26 @@ export const AuthPage = () => {
       toast.error(error.message);
     } else {
       toast.success('Conta criada com sucesso! Verifique seu email.');
+    }
+    
+    setLoading(false);
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error('Digite seu email primeiro');
+      return;
+    }
+    
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/`
+    });
+    
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Email de recuperação enviado! Verifique sua caixa de entrada.');
     }
     
     setLoading(false);
@@ -101,6 +122,15 @@ export const AuthPage = () => {
                   disabled={loading}
                 >
                   {loading ? 'Entrando...' : 'Entrar'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-sm"
+                  onClick={handleForgotPassword}
+                  disabled={loading}
+                >
+                  Esqueci minha senha
                 </Button>
               </form>
             </TabsContent>

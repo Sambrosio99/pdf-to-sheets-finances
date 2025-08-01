@@ -9,6 +9,11 @@ import { MonthlyEvolutionChart } from "./MonthlyEvolutionChart";
 import { FinancialGoals } from "./FinancialGoals";
 import { SmartInsights } from "./SmartInsights";
 import { AdvancedFilters } from "./AdvancedFilters";
+import { CashFlowChart } from "./CashFlowChart";
+import { PaymentMethodChart } from "./PaymentMethodChart";
+import { CategoryTrendsChart } from "./CategoryTrendsChart";
+import { FixedVsVariableChart } from "./FixedVsVariableChart";
+import { SpendingPatternsChart } from "./SpendingPatternsChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface EnhancedDashboardOverviewProps {
@@ -325,11 +330,12 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
 
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <CashFlowChart transactions={filteredTransactions} />
+            <PaymentMethodChart transactions={filteredTransactions} />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <ExpenseChart transactions={filteredTransactions} />
             <CategoryChart transactions={filteredTransactions} />
-          </div>
-          <div className="grid grid-cols-1 gap-6">
-            <MonthlyEvolutionChart transactions={filteredTransactions} />
           </div>
         </TabsContent>
 
@@ -339,12 +345,13 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
 
         <TabsContent value="insights" className="space-y-6">
           <SmartInsights transactions={filteredTransactions} />
+          <SpendingPatternsChart transactions={filteredTransactions} />
         </TabsContent>
 
         <TabsContent value="analysis" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ExpenseChart transactions={filteredTransactions} />
-            <CategoryChart transactions={filteredTransactions} />
+            <CategoryTrendsChart transactions={filteredTransactions} />
+            <FixedVsVariableChart transactions={filteredTransactions} />
           </div>
           <div className="grid grid-cols-1 gap-6">
             <MonthlyEvolutionChart transactions={filteredTransactions} />
@@ -357,8 +364,8 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
             onFilterChange={setFilteredTransactions}
           />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ExpenseChart transactions={filteredTransactions} />
-            <CategoryChart transactions={filteredTransactions} />
+            <CashFlowChart transactions={filteredTransactions} />
+            <PaymentMethodChart transactions={filteredTransactions} />
           </div>
         </TabsContent>
       </Tabs>

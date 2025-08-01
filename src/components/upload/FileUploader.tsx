@@ -21,11 +21,11 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     const desc = description.toLowerCase();
     
     // Nubank específicos
-    if (desc.includes('google') || desc.includes('chatgpt') || desc.includes('marvel')) return 'Assinaturas';
+    if (desc.includes('google') || desc.includes('chatgpt') || desc.includes('marvel') || desc.includes('lovable')) return 'Assinaturas';
     if (desc.includes('vivo') || desc.includes('conta vivo') || desc.includes('recvivo')) return 'Celular';
     if (desc.includes('wellhub') || desc.includes('academia') || desc.includes('gym')) return 'Academia';
-    if (desc.includes('sociedade mineira de cultura') || desc.includes('puc') || desc.includes('faculdade') || desc.includes('universidade')) return 'Faculdade';
-    if (desc.includes('lovable') || desc.includes('aliexpress') || desc.includes('amazon')) return 'Compras';
+    if (desc.includes('sociedade mineira de cultura') || desc.includes('puc') || desc.includes('faculdade') || desc.includes('universidade') || desc.includes('pontificia') || desc.includes('catolica')) return 'Faculdade';
+    if (desc.includes('aliexpress') || desc.includes('amazon')) return 'Compras';
     if (desc.includes('pagamento recebido') || desc.includes('estorno')) return 'Transferência Recebida';
     if (desc.includes('iof') || desc.includes('juros') || desc.includes('multa')) return 'Taxas e Juros';
     

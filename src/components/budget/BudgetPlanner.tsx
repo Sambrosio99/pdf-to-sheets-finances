@@ -10,11 +10,24 @@ interface BudgetPlannerProps {
 }
 
 export const BudgetPlanner = ({ transactions }: BudgetPlannerProps) => {
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  // Usar o mês mais recente das transações, não o mês atual
+  const latestMonth = transactions.length > 0 
+    ? transactions
+        .map(t => t.date.slice(0, 7))
+        .sort()
+        .reverse()[0]
+    : new Date().toISOString().slice(0, 7);
+    
   const monthlyIncome = 1682; // Seu salário líquido
   
+  console.log('BudgetPlanner Debug:', {
+    latestMonth,
+    totalTransactions: transactions.length,
+    currentMonthTransactions: transactions.filter(t => t.type === 'expense' && t.date.startsWith(latestMonth)).length
+  });
+  
   const currentMonthExpenses = transactions.filter(t => 
-    t.type === 'expense' && t.date.startsWith(currentMonth)
+    t.type === 'expense' && t.date.startsWith(latestMonth)
   );
 
   // Orçamento personalizado baseado na sua situação

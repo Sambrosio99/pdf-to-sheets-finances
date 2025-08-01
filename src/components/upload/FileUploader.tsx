@@ -122,14 +122,18 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
               const [dateStr, description, valueStr] = columns;
               const amount = Math.abs(parseFloat(valueStr.replace(',', '.')));
               
+              // 🔧 DETECTAR ESTORNOS em faturas de cartão
+              const isRefund = description.toLowerCase().includes('estorno') || 
+                              description.toLowerCase().includes('extorno');
+              
               if (!isNaN(amount) && amount > 0 && dateStr && description) {
                 transactions.push({
-                  date: formatDate(dateStr), // 🔧 USAR FUNÇÃO DE FORMATAÇÃO CORRETA
+                  date: formatDate(dateStr),
                   description: description.trim(),
                   category: categorizeTransaction(description),
                   paymentMethod: 'Cartão de Crédito', // 🔴 SEMPRE cartão de crédito para faturas
                   amount: amount,
-                  type: 'expense', // 🔴 SEMPRE despesa para faturas
+                  type: isRefund ? 'income' : 'expense', // 🔧 ESTORNO = receita, resto = despesa
                   status: 'paid'
                 });
               }
@@ -479,7 +483,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
             <AlertDescription>
               <strong>Sistema otimizado para múltiplos formatos:</strong>
               <ul className="mt-2 space-y-1 text-sm">
-                <li>🔴 <strong>Faturas de Cartão:</strong> Arquivos com "fatura" ou "cartao" no nome → SEMPRE "Cartão de Crédito"</li>
+                <li>🔴 <strong>Faturas de Cartão:</strong> Arquivos com "fatura" ou "cartao" no nome → SEMPRE "Cartão de Crédito" (detecta estornos automaticamente)</li>
                 <li>🟢 <strong>Extratos Bancários:</strong> Outros arquivos → Detecta automaticamente o método de pagamento</li>
                 <li>✅ <strong>Nubank CSV:</strong> date, title, amount (formato detectado automaticamente)</li>
                 <li>✅ <strong>CSV bancário tradicional:</strong> Data, Valor, Identificador, Descrição</li>

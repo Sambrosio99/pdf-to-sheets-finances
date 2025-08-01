@@ -55,7 +55,7 @@ export const ExpenseChart = ({ transactions }: ExpenseChartProps) => {
 
   const formatMonth = (month: string) => {
     const date = new Date(month + '-01');
-    return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+    return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
   };
 
   return (

@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Transaction } from "@/types/finance";
-import { TrendingUp, TrendingDown, DollarSign, PieChart, AlertCircle, Target } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, PieChart, AlertCircle, Target, CheckCircle } from "lucide-react";
 import { ExpenseChart } from "./ExpenseChart";
 import { CategoryChart } from "./CategoryChart";
 import { MonthlyEvolutionChart } from "./MonthlyEvolutionChart";
@@ -34,6 +34,18 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
     t.date.startsWith(latestMonth)
   );
 
+  // Calcular mês anterior para comparação
+  const previousMonth = (() => {
+    const [year, month] = latestMonth.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+    date.setMonth(date.getMonth() - 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  })();
+
+  const previousMonthTransactions = filteredTransactions.filter(t => 
+    t.date.startsWith(previousMonth)
+  );
+
   const totalIncome = currentMonthTransactions
     .filter(t => t.type === 'income')
     .reduce((sum, t) => sum + Number(t.amount), 0);
@@ -42,12 +54,66 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
+  const previousIncome = previousMonthTransactions
+    .filter(t => t.type === 'income')
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  const previousExpenses = previousMonthTransactions
+    .filter(t => t.type === 'expense')
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
   const balance = totalIncome - totalExpenses;
   
+  // Calcular tendências e projeções
+  const incomeVariation = previousIncome > 0 ? ((totalIncome - previousIncome) / previousIncome) * 100 : 0;
+  const expenseVariation = previousExpenses > 0 ? ((totalExpenses - previousExpenses) / previousExpenses) * 100 : 0;
+  
+  // Mapear transações para categorias inteligentes
+  const mapTransactionToCategory = (description: string, originalCategory: string): string => {
+    const desc = description.toLowerCase();
+    
+    if (desc.includes('puc') || desc.includes('faculdade') || desc.includes('universidade')) {
+      return 'Faculdade';
+    }
+    if (desc.includes('wellhub') || desc.includes('academia') || desc.includes('gym')) {
+      return 'Academia';
+    }
+    if (desc.includes('vivo') || desc.includes('telefone') || desc.includes('celular')) {
+      return 'Celular';
+    }
+    if (desc.includes('uber') || desc.includes('transporte') || desc.includes('taxi') || desc.includes('passagem')) {
+      return 'Transporte';
+    }
+    if (desc.includes('rdb') || desc.includes('investimento') || desc.includes('aplicação') || desc.includes('poupança')) {
+      return 'Investimentos';
+    }
+    if (desc.includes('baixo') || desc.includes('instrumento') || desc.includes('música')) {
+      return 'Baixo Musical';
+    }
+    
+    return originalCategory;
+  };
+
+  // Calcular progresso das metas
+  const monthlyGoalSavings = 336; // 20% da renda para reserva de emergência
+  const currentSavings = currentMonthTransactions
+    .filter(t => t.type === 'expense')
+    .filter(t => {
+      const mappedCategory = mapTransactionToCategory(t.description, t.category);
+      return mappedCategory.toLowerCase().includes('investimentos');
+    })
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const savingsProgress = (currentSavings / monthlyGoalSavings) * 100;
+  
   // Calcular gastos fixos baseado nas categorias de despesas recorrentes
-  const fixedCategories = ['Educação', 'Telefone/Internet', 'Academias/Esportes'];
+  const fixedCategories = ['Faculdade', 'Celular', 'Academia'];
   const fixedExpenses = currentMonthTransactions
-    .filter(t => t.type === 'expense' && fixedCategories.includes(t.category))
+    .filter(t => t.type === 'expense')
+    .filter(t => {
+      const mappedCategory = mapTransactionToCategory(t.description, t.category);
+      return fixedCategories.includes(mappedCategory);
+    })
     .reduce((sum, t) => sum + Number(t.amount), 0);
   
   const availableIncome = totalIncome - fixedExpenses;
@@ -63,38 +129,113 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
 
   return (
     <div className="space-y-6">
-      {/* Resumo Executivo */}
+      {/* Resumo Executivo Estratégico */}
       <Card className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white border-0 shadow-xl">
         <CardHeader>
-          <CardTitle className="text-2xl">💼 Resumo Executivo - {(() => {
+          <CardTitle className="text-2xl">🧠 Análise Estratégica - {(() => {
             const [year, month] = latestMonth.split('-');
             const date = new Date(parseInt(year), parseInt(month) - 1, 1);
             return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
           })()}</CardTitle>
           <CardDescription className="text-indigo-100">
-            Visão geral da sua situação financeira atual
+            Insights inteligentes e tendências para suas decisões financeiras
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className="text-center">
-              <p className="text-sm opacity-90">Receita Total</p>
-              <p className="text-2xl font-bold">{formatCurrency(totalIncome)}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Tendência de Receita */}
+            <div className="text-center bg-white/10 rounded-lg p-4">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                {incomeVariation >= 0 ? (
+                  <TrendingUp className="h-5 w-5 text-green-300" />
+                ) : (
+                  <TrendingDown className="h-5 w-5 text-red-300" />
+                )}
+                <p className="text-sm opacity-90">Tendência de Receita</p>
+              </div>
+              <p className={`text-xl font-bold ${incomeVariation >= 0 ? 'text-green-200' : 'text-red-200'}`}>
+                {incomeVariation >= 0 ? '+' : ''}{incomeVariation.toFixed(1)}%
+              </p>
+              <p className="text-xs opacity-75 mt-1">vs mês anterior</p>
             </div>
-            <div className="text-center">
-              <p className="text-sm opacity-90">Gastos Fixos</p>
-              <p className="text-2xl font-bold text-orange-200">{formatCurrency(fixedExpenses)}</p>
+
+            {/* Controle de Gastos */}
+            <div className="text-center bg-white/10 rounded-lg p-4">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                {expenseVariation <= 0 ? (
+                  <TrendingDown className="h-5 w-5 text-green-300" />
+                ) : (
+                  <TrendingUp className="h-5 w-5 text-orange-300" />
+                )}
+                <p className="text-sm opacity-90">Controle de Gastos</p>
+              </div>
+              <p className={`text-xl font-bold ${expenseVariation <= 0 ? 'text-green-200' : 'text-orange-200'}`}>
+                {expenseVariation >= 0 ? '+' : ''}{expenseVariation.toFixed(1)}%
+              </p>
+              <p className="text-xs opacity-75 mt-1">vs mês anterior</p>
             </div>
-            <div className="text-center">
-              <p className="text-sm opacity-90">Renda Livre</p>
-              <p className="text-2xl font-bold text-green-200">{formatCurrency(availableIncome)}</p>
+
+            {/* Progresso das Metas */}
+            <div className="text-center bg-white/10 rounded-lg p-4">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Target className="h-5 w-5 text-yellow-300" />
+                <p className="text-sm opacity-90">Meta de Poupança</p>
+              </div>
+              <p className={`text-xl font-bold ${savingsProgress >= 100 ? 'text-green-200' : savingsProgress >= 50 ? 'text-yellow-200' : 'text-orange-200'}`}>
+                {savingsProgress.toFixed(0)}%
+              </p>
+              <p className="text-xs opacity-75 mt-1">{formatCurrency(currentSavings)} de {formatCurrency(monthlyGoalSavings)}</p>
             </div>
-            <div className="text-center">
-              <p className="text-sm opacity-90">Taxa de Uso</p>
-              <p className={`text-2xl font-bold ${spendingRate > 80 ? 'text-red-200' : 'text-green-200'}`}>
-                {spendingRate.toFixed(1)}%
+
+            {/* Saúde Financeira */}
+            <div className="text-center bg-white/10 rounded-lg p-4">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                {balance > 500 ? (
+                  <CheckCircle className="h-5 w-5 text-green-300" />
+                ) : balance > 0 ? (
+                  <AlertCircle className="h-5 w-5 text-yellow-300" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-red-300" />
+                )}
+                <p className="text-sm opacity-90">Saúde Financeira</p>
+              </div>
+              <p className={`text-xl font-bold ${
+                balance > 500 ? 'text-green-200' : balance > 0 ? 'text-yellow-200' : 'text-red-200'
+              }`}>
+                {balance > 500 ? 'Excelente' : balance > 0 ? 'Boa' : 'Atenção'}
+              </p>
+              <p className="text-xs opacity-75 mt-1">
+                {balance > 0 ? `Sobrou ${formatCurrency(balance)}` : `Déficit ${formatCurrency(Math.abs(balance))}`}
               </p>
             </div>
+          </div>
+
+          {/* Alertas e Recomendações */}
+          <div className="mt-6 space-y-3">
+            {savingsProgress < 50 && (
+              <div className="bg-yellow-500/20 border border-yellow-400/30 rounded-lg p-3">
+                <p className="text-sm">
+                  <strong>💡 Oportunidade:</strong> Você está em {savingsProgress.toFixed(0)}% da meta de poupança. 
+                  Considere transferir mais {formatCurrency(monthlyGoalSavings - currentSavings)} para investimentos este mês.
+                </p>
+              </div>
+            )}
+            {expenseVariation > 20 && (
+              <div className="bg-orange-500/20 border border-orange-400/30 rounded-lg p-3">
+                <p className="text-sm">
+                  <strong>⚠️ Atenção:</strong> Seus gastos aumentaram {expenseVariation.toFixed(1)}% comparado ao mês passado. 
+                  Revise os gastos variáveis para manter o controle.
+                </p>
+              </div>
+            )}
+            {balance > 1000 && savingsProgress >= 100 && (
+              <div className="bg-green-500/20 border border-green-400/30 rounded-lg p-3">
+                <p className="text-sm">
+                  <strong>🎉 Parabéns!</strong> Mês excepcional! Você bateu suas metas e ainda sobrou {formatCurrency(balance)}. 
+                  Considere investir esse extra ou acelerar a meta do baixo musical.
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

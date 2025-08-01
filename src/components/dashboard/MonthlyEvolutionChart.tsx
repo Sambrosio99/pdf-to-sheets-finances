@@ -16,9 +16,9 @@ export const MonthlyEvolutionChart = ({ transactions }: MonthlyEvolutionChartPro
     }
     
     if (transaction.type === 'income') {
-      acc[month].income += transaction.amount;
+      acc[month].income += Number(transaction.amount);
     } else {
-      acc[month].expenses += transaction.amount;
+      acc[month].expenses += Number(transaction.amount);
     }
     
     return acc;

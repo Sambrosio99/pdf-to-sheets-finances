@@ -25,11 +25,11 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
 
   const totalIncome = currentMonthTransactions
     .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + Number(t.amount), 0);
 
   const totalExpenses = currentMonthTransactions
     .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + Number(t.amount), 0);
 
   const balance = totalIncome - totalExpenses;
   const monthlyIncome = 1682; // Salário fixo

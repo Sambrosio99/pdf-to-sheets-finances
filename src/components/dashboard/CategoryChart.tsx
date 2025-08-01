@@ -14,7 +14,7 @@ export const CategoryChart = ({ transactions }: CategoryChartProps) => {
     if (!acc[transaction.category]) {
       acc[transaction.category] = 0;
     }
-    acc[transaction.category] += transaction.amount;
+    acc[transaction.category] += Number(transaction.amount);
     return acc;
   }, {} as Record<string, number>);
 

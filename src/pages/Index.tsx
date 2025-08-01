@@ -9,7 +9,7 @@ import { TransactionList } from "@/components/transactions/TransactionList";
 import { BudgetPlanner } from "@/components/budget/BudgetPlanner";
 import { FileUploader } from "@/components/upload/FileUploader";
 import { GoogleSheetsExport } from "@/components/export/GoogleSheetsExport";
-import { GoogleSheetsIntegration } from "@/components/export/GoogleSheetsIntegration";
+import { YearlyReport } from "@/components/reports/YearlyReport";
 import { PasswordChangeForm } from "@/components/auth/PasswordChangeForm";
 import { useAuth } from "@/hooks/useAuth";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -90,8 +90,8 @@ export default function Index() {
             <TabsTrigger value="export" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white">
               📤 Exportar CSV
             </TabsTrigger>
-            <TabsTrigger value="sheets" className="data-[state=active]:bg-emerald-500 data-[state=active]:text-white">
-              📊 Google Sheets
+            <TabsTrigger value="reports" className="data-[state=active]:bg-emerald-500 data-[state=active]:text-white">
+              📄 Relatórios
             </TabsTrigger>
             <TabsTrigger value="settings" className="data-[state=active]:bg-red-500 data-[state=active]:text-white">
               ⚙️ Configurações
@@ -156,8 +156,8 @@ export default function Index() {
             <GoogleSheetsExport transactions={transactions} />
           </TabsContent>
 
-          <TabsContent value="sheets" className="space-y-6">
-            <GoogleSheetsIntegration transactions={transactions} />
+          <TabsContent value="reports" className="space-y-6">
+            <YearlyReport transactions={transactions} />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">

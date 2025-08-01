@@ -45,7 +45,7 @@ export const BudgetPlanner = ({ transactions }: BudgetPlannerProps) => {
   const mapTransactionToCategory = (description: string, originalCategory: string): string => {
     const desc = description.toLowerCase();
     
-    if (desc.includes('puc') || desc.includes('faculdade') || desc.includes('universidade')) {
+    if (desc.includes('puc') || desc.includes('faculdade') || desc.includes('universidade') || desc.includes('sociedade mineira de cultura')) {
       return 'Faculdade';
     }
     if (desc.includes('wellhub') || desc.includes('academia') || desc.includes('gym')) {

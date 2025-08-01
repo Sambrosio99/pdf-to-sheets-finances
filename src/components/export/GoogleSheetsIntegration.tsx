@@ -2,94 +2,156 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { 
+  FileText, 
   FileSpreadsheet, 
-  Rocket, 
-  RefreshCw, 
-  ExternalLink, 
+  Download, 
   CheckCircle,
-  Settings,
-  TrendingUp,
-  Target,
-  BarChart3
+  BarChart3,
+  Calendar,
+  TrendingUp
 } from 'lucide-react';
 import { Transaction } from '@/types/finance';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 
-interface GoogleSheetsIntegrationProps {
+interface TransactionExportProps {
   transactions: Transaction[];
 }
 
-export const GoogleSheetsIntegration = ({ transactions }: GoogleSheetsIntegrationProps) => {
+export const GoogleSheetsIntegration = ({ transactions }: TransactionExportProps) => {
   const [loading, setLoading] = useState(false);
-  const [spreadsheetId, setSpreadsheetId] = useState('');
-  const [targetSpreadsheetId, setTargetSpreadsheetId] = useState('');
-  const [spreadsheetUrl, setSpreadsheetUrl] = useState('');
-  const [isConfigured, setIsConfigured] = useState(false);
 
-  const createCompleteDashboard = async () => {
+  const exportToTXT = () => {
     setLoading(true);
     
     try {
-      const { data, error } = await supabase.functions.invoke('google-sheets-integration', {
-        body: { 
-          action: 'create_complete_dashboard',
-          transactions,
-          spreadsheetId: targetSpreadsheetId 
-        }
-      });
-
-      if (error) throw error;
-
-      setSpreadsheetId(data.spreadsheetId);
-      setSpreadsheetUrl(data.url);
-      setIsConfigured(true);
+      const content = generateTXTContent();
       
-      toast.success('Dashboard completo criado no Google Sheets!', {
-        description: 'Todas as análises, gráficos e dados foram exportados com sucesso.',
-        duration: 5000,
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `transacoes_completas_${new Date().toISOString().split('T')[0]}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success('Relatório TXT exportado com sucesso!', {
+        description: `${transactions.length} transações exportadas`,
       });
     } catch (error) {
-      console.error('Erro ao criar dashboard:', error);
-      toast.error('Erro ao criar dashboard no Google Sheets. Verifique se a API key está configurada.');
+      console.error('Erro ao exportar TXT:', error);
+      toast.error('Erro ao exportar arquivo TXT');
     } finally {
       setLoading(false);
     }
   };
 
-  const updateExistingSheets = async () => {
-    if (!spreadsheetId) {
-      toast.error('Por favor, configure primeiro o ID da planilha.');
-      return;
-    }
-
+  const exportToExcel = () => {
     setLoading(true);
     
     try {
-      const { data, error } = await supabase.functions.invoke('google-sheets-integration', {
-        body: { 
-          action: 'update_sheets',
-          transactions,
-          sheetsId: spreadsheetId
-        }
-      });
-
-      if (error) throw error;
+      const content = generateExcelContent();
       
-      toast.success('Planilha atualizada com sucesso!', {
-        description: 'Todos os dados foram sincronizados automaticamente.',
+      const blob = new Blob([content], { type: 'application/vnd.ms-excel;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `transacoes_completas_${new Date().toISOString().split('T')[0]}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success('Planilha Excel exportada com sucesso!', {
+        description: `${transactions.length} transações exportadas`,
       });
     } catch (error) {
-      console.error('Erro ao atualizar planilha:', error);
-      toast.error('Erro ao atualizar planilha. Tente novamente.');
+      console.error('Erro ao exportar Excel:', error);
+      toast.error('Erro ao exportar planilha Excel');
     } finally {
       setLoading(false);
     }
+  };
+
+  const generateTXTContent = () => {
+    const header = `RELATÓRIO COMPLETO DE TRANSAÇÕES FINANCEIRAS
+=====================================================
+Período: ${getDateRange()}
+Total de transações: ${transactions.length}
+Gerado em: ${new Date().toLocaleString('pt-BR')}
+=====================================================
+
+`;
+
+    const summary = `RESUMO FINANCEIRO:
+- Total de Receitas: ${formatCurrency(totalIncome)}
+- Total de Despesas: ${formatCurrency(totalExpenses)}
+- Saldo: ${formatCurrency(totalIncome - totalExpenses)}
+
+`;
+
+    const transactionsContent = `DETALHAMENTO DAS TRANSAÇÕES:
+${'='.repeat(50)}
+
+${transactions
+  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  .map(t => 
+    `Data: ${new Date(t.date).toLocaleDateString('pt-BR')}
+Descrição: ${t.description}
+Categoria: ${t.category}
+Método: ${t.paymentMethod}
+Valor: ${formatCurrency(t.amount)}
+Tipo: ${t.type === 'income' ? 'Receita' : 'Despesa'}
+Status: ${t.status === 'paid' ? 'Pago' : 'Pendente'}
+${'─'.repeat(30)}`
+  ).join('\n\n')}
+`;
+
+    return header + summary + transactionsContent;
+  };
+
+  const generateExcelContent = () => {
+    const headers = [
+      'Data',
+      'Descrição', 
+      'Categoria',
+      'Método de Pagamento',
+      'Valor (R$)',
+      'Tipo',
+      'Status'
+    ];
+
+    const rows = transactions
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .map(t => [
+        new Date(t.date).toLocaleDateString('pt-BR'),
+        t.description,
+        t.category,
+        t.paymentMethod,
+        t.amount.toFixed(2).replace('.', ','),
+        t.type === 'income' ? 'Receita' : 'Despesa',
+        t.status === 'paid' ? 'Pago' : 'Pendente'
+      ]);
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${cell}"`).join('\t'))
+      .join('\n');
+
+    return csvContent;
+  };
+
+  const getDateRange = () => {
+    if (transactions.length === 0) return 'Nenhuma transação';
+    
+    const dates = transactions.map(t => new Date(t.date)).sort((a, b) => a.getTime() - b.getTime());
+    const startDate = dates[0].toLocaleDateString('pt-BR');
+    const endDate = dates[dates.length - 1].toLocaleDateString('pt-BR');
+    
+    return startDate === endDate ? startDate : `${startDate} até ${endDate}`;
   };
 
   const formatCurrency = (value: number) => {
@@ -106,14 +168,14 @@ export const GoogleSheetsIntegration = ({ transactions }: GoogleSheetsIntegratio
   return (
     <div className="space-y-6">
       {/* Header explicativo */}
-      <Card className="bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0 shadow-xl">
+      <Card className="bg-gradient-to-r from-blue-500 to-purple-600 text-white border-0 shadow-xl">
         <CardHeader>
           <CardTitle className="text-2xl flex items-center gap-2">
-            <FileSpreadsheet className="h-6 w-6" />
-            Dashboard Completo no Google Sheets
+            <Download className="h-6 w-6" />
+            Exportar Transações Completas
           </CardTitle>
-          <CardDescription className="text-green-100">
-            Transforme todos os seus dados financeiros em uma planilha interativa e automatizada
+          <CardDescription className="text-blue-100">
+            Exporte todas as suas transações financeiras em formato TXT ou Excel
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -123,6 +185,10 @@ export const GoogleSheetsIntegration = ({ transactions }: GoogleSheetsIntegratio
               <p className="text-xl font-bold">{totalTransactions}</p>
             </div>
             <div className="text-center">
+              <p className="text-sm opacity-90">Período</p>
+              <p className="text-lg font-bold">{getDateRange()}</p>
+            </div>
+            <div className="text-center">
               <p className="text-sm opacity-90">Receitas Totais</p>
               <p className="text-xl font-bold">{formatCurrency(totalIncome)}</p>
             </div>
@@ -130,66 +196,72 @@ export const GoogleSheetsIntegration = ({ transactions }: GoogleSheetsIntegratio
               <p className="text-sm opacity-90">Despesas Totais</p>
               <p className="text-xl font-bold">{formatCurrency(totalExpenses)}</p>
             </div>
-            <div className="text-center">
-              <p className="text-sm opacity-90">Saldo</p>
-              <p className={`text-xl font-bold ${totalIncome - totalExpenses >= 0 ? 'text-green-100' : 'text-red-200'}`}>
-                {formatCurrency(totalIncome - totalExpenses)}
-              </p>
-            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Funcionalidades incluídas */}
+      {/* Formatos de exportação */}
       <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
         <CardHeader>
           <CardTitle className="text-indigo-700 flex items-center gap-2">
             <BarChart3 className="h-5 w-5" />
-            O que será incluído na sua planilha
+            Dados incluídos na exportação
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-3">
-              <h4 className="font-semibold text-gray-800">📊 Análises e Gráficos</h4>
+              <h4 className="font-semibold text-gray-800">📊 Informações por transação</h4>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  Dashboard executivo com resumo mensal
+                  Data da transação
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  Gráficos de gastos por categoria
+                  Descrição detalhada
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  Evolução mensal de receitas vs despesas
+                  Categoria e subcategoria
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  Análise de saldo acumulado
+                  Método de pagamento
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  Valor e tipo (receita/despesa)
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  Status (pago/pendente)
                 </li>
               </ul>
             </div>
 
             <div className="space-y-3">
-              <h4 className="font-semibold text-gray-800">🎯 Metas e Orçamento</h4>
+              <h4 className="font-semibold text-gray-800">📈 Resumo financeiro</h4>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  Progresso da reserva de emergência
+                  Total de receitas do período
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  Meta do baixo musical
+                  Total de despesas do período
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  Orçamento mensal planejado vs realizado
+                  Saldo final calculado
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  Alertas automáticos de gastos
+                  Período de análise completo
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  Data de geração do relatório
                 </li>
               </ul>
             </div>
@@ -198,15 +270,16 @@ export const GoogleSheetsIntegration = ({ transactions }: GoogleSheetsIntegratio
           <Separator className="my-4" />
 
           <div className="bg-blue-50 p-4 rounded-lg">
-            <h4 className="font-semibold text-blue-800 mb-2">🚀 Abas que serão criadas:</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Badge variant="secondary">Dashboard</Badge>
-              <Badge variant="secondary">Transações</Badge>
-              <Badge variant="secondary">Orçamento Mensal</Badge>
-              <Badge variant="secondary">Metas Financeiras</Badge>
-              <Badge variant="secondary">Análises</Badge>
-              <Badge variant="secondary">Projeções</Badge>
-              <Badge variant="secondary">Configurações</Badge>
+            <h4 className="font-semibold text-blue-800 mb-2">📄 Formatos disponíveis:</h4>
+            <div className="grid grid-cols-2 gap-2">
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <FileText className="h-3 w-3" />
+                Arquivo TXT (relatório completo)
+              </Badge>
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <FileSpreadsheet className="h-3 w-3" />
+                Planilha Excel (dados tabulados)
+              </Badge>
             </div>
           </div>
         </CardContent>
@@ -214,54 +287,36 @@ export const GoogleSheetsIntegration = ({ transactions }: GoogleSheetsIntegratio
 
       {/* Ações principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Criar nova planilha */}
+        {/* Exportar TXT */}
         <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
           <CardHeader>
             <CardTitle className="text-green-700 flex items-center gap-2">
-              <Rocket className="h-5 w-5" />
-              Criar Dashboard Completo
+              <FileText className="h-5 w-5" />
+              Exportar Relatório TXT
             </CardTitle>
             <CardDescription>
-              Crie uma nova planilha com todas as análises e gráficos
+              Gere um relatório completo em formato texto com resumo e detalhamento
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="targetSpreadsheetId">ID da sua planilha (opcional)</Label>
-              <Input
-                id="targetSpreadsheetId"
-                placeholder="Cole o ID da planilha onde criar o dashboard"
-                value={targetSpreadsheetId}
-                onChange={(e) => setTargetSpreadsheetId(e.target.value)}
-              />
-              <p className="text-xs text-gray-600">
-                Deixe vazio para criar uma nova planilha ou cole o ID da planilha existente
-              </p>
+            <div className="bg-green-50 p-3 rounded-lg">
+              <h4 className="font-medium text-green-800 mb-2">Incluído no arquivo TXT:</h4>
+              <ul className="text-sm text-green-700 space-y-1">
+                <li>• Resumo financeiro completo</li>
+                <li>• Período de análise</li>
+                <li>• Detalhamento de cada transação</li>
+                <li>• Formatação organizada para leitura</li>
+              </ul>
             </div>
 
             <Button
-              onClick={createCompleteDashboard}
+              onClick={exportToTXT}
               disabled={loading || transactions.length === 0}
               className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
             >
-              <Rocket className="mr-2 h-4 w-4" />
-              {loading ? 'Criando Dashboard...' : 'Criar Dashboard Completo'}
+              <FileText className="mr-2 h-4 w-4" />
+              {loading ? 'Gerando TXT...' : 'Baixar Relatório TXT'}
             </Button>
-
-            {spreadsheetUrl && (
-              <div className="p-3 bg-green-50 rounded-lg">
-                <p className="text-sm text-green-800 font-medium mb-2">✅ Dashboard criado com sucesso!</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open(spreadsheetUrl, '_blank')}
-                  className="w-full"
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Abrir Planilha
-                </Button>
-              </div>
-            )}
 
             {transactions.length === 0 && (
               <p className="text-center text-gray-500 text-sm">
@@ -271,40 +326,43 @@ export const GoogleSheetsIntegration = ({ transactions }: GoogleSheetsIntegratio
           </CardContent>
         </Card>
 
-        {/* Atualizar planilha existente */}
+        {/* Exportar Excel */}
         <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
           <CardHeader>
             <CardTitle className="text-blue-700 flex items-center gap-2">
-              <RefreshCw className="h-5 w-5" />
-              Atualizar Planilha Existente
+              <FileSpreadsheet className="h-5 w-5" />
+              Exportar Planilha Excel
             </CardTitle>
             <CardDescription>
-              Sincronize dados com uma planilha já criada
+              Exporte dados estruturados em planilha Excel para análises avançadas
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="spreadsheetId">ID da Planilha do Google Sheets</Label>
-              <Input
-                id="spreadsheetId"
-                placeholder="Exemplo: 1abc...xyz"
-                value={spreadsheetId}
-                onChange={(e) => setSpreadsheetId(e.target.value)}
-              />
-              <p className="text-xs text-gray-600">
-                Encontre o ID na URL da planilha: docs.google.com/spreadsheets/d/<strong>ID_AQUI</strong>/edit
-              </p>
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <h4 className="font-medium text-blue-800 mb-2">Incluído na planilha Excel:</h4>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>• Dados tabulados por colunas</li>
+                <li>• Ordenação cronológica</li>
+                <li>• Formatação para análise</li>
+                <li>• Compatível com filtros e gráficos</li>
+              </ul>
             </div>
 
             <Button
-              onClick={updateExistingSheets}
-              disabled={loading || !spreadsheetId}
+              onClick={exportToExcel}
+              disabled={loading || transactions.length === 0}
               variant="outline"
-              className="w-full"
+              className="w-full border-blue-500 text-blue-700 hover:bg-blue-50"
             >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              {loading ? 'Atualizando...' : 'Atualizar Dados'}
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              {loading ? 'Gerando Excel...' : 'Baixar Planilha Excel'}
             </Button>
+
+            {transactions.length === 0 && (
+              <p className="text-center text-gray-500 text-sm">
+                Adicione algumas transações primeiro
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -313,43 +371,46 @@ export const GoogleSheetsIntegration = ({ transactions }: GoogleSheetsIntegratio
       <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
         <CardHeader>
           <CardTitle className="text-purple-700 flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Como usar sua planilha automatizada
+            <TrendingUp className="h-5 w-5" />
+            Como usar os arquivos exportados
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <h4 className="font-semibold text-gray-800 mb-2">📋 Primeiros passos:</h4>
-                <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
-                  <li>Clique em "Criar Dashboard Completo"</li>
-                  <li>Aguarde a criação da planilha</li>
-                  <li>Acesse o link gerado</li>
-                  <li>Faça uma cópia para sua conta Google</li>
-                </ol>
+                <h4 className="font-semibold text-gray-800 mb-2">📄 Arquivo TXT:</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Ideal para backup e arquivamento</li>
+                  <li>• Pode ser aberto em qualquer editor de texto</li>
+                  <li>• Formato de relatório para impressão</li>
+                  <li>• Inclui resumo e detalhamento completo</li>
+                </ul>
               </div>
               
               <div>
-                <h4 className="font-semibold text-gray-800 mb-2">🔄 Para manter atualizado:</h4>
-                <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
-                  <li>Copie o ID da sua planilha</li>
-                  <li>Cole no campo "ID da Planilha"</li>
-                  <li>Clique em "Atualizar Dados"</li>
-                  <li>Todos os gráficos se atualizarão automaticamente</li>
-                </ol>
+                <h4 className="font-semibold text-gray-800 mb-2">📊 Planilha Excel:</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Permite análises avançadas com filtros</li>
+                  <li>• Compatível com Excel, LibreOffice, Google Sheets</li>
+                  <li>• Dados estruturados para criar gráficos</li>
+                  <li>• Ordenação cronológica reversa (mais recentes primeiro)</li>
+                </ul>
               </div>
             </div>
 
             <Separator />
 
             <div className="bg-amber-50 p-4 rounded-lg">
-              <h4 className="font-semibold text-amber-800 mb-2">⚡ Funcionalidades automáticas:</h4>
+              <h4 className="font-semibold text-amber-800 mb-2 flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Dicas importantes:
+              </h4>
               <ul className="text-sm text-amber-700 space-y-1">
-                <li>• <strong>Gráficos dinâmicos:</strong> Atualizados automaticamente quando você adicionar dados</li>
-                <li>• <strong>Fórmulas inteligentes:</strong> Calculam metas, projeções e alertas em tempo real</li>
-                <li>• <strong>Formatação condicional:</strong> Cores que mudam baseadas no seu desempenho</li>
-                <li>• <strong>Análises personalizadas:</strong> Baseadas nos seus R$ 1.682 de salário e metas específicas</li>
+                <li>• <strong>Dados atualizados:</strong> Os arquivos incluem todas as transações cadastradas até o momento da exportação</li>
+                <li>• <strong>Backup regular:</strong> Exporte periodicamente para manter um histórico completo</li>
+                <li>• <strong>Análise externa:</strong> Use os dados em outras ferramentas de análise financeira</li>
+                <li>• <strong>Controle total:</strong> Seus dados ficam disponíveis mesmo offline</li>
               </ul>
             </div>
           </div>

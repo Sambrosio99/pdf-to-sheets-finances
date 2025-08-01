@@ -10,6 +10,26 @@ interface CategoryChartProps {
 export const CategoryChart = ({ transactions }: CategoryChartProps) => {
   const expenseTransactions = transactions.filter(t => t.type === 'expense');
   
+  // Se não há despesas, mostrar mensagem
+  if (expenseTransactions.length === 0) {
+    return (
+      <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-purple-700">🥧 Gastos por Categoria</CardTitle>
+          <CardDescription>
+            Distribuição das suas despesas
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center h-64">
+          <div className="text-center text-gray-500">
+            <p className="text-lg font-medium">Nenhuma despesa encontrada</p>
+            <p className="text-sm">Faça upload dos seus extratos para ver a distribuição</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  
   const categoryData = expenseTransactions.reduce((acc, transaction) => {
     if (!acc[transaction.category]) {
       acc[transaction.category] = 0;

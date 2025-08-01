@@ -8,6 +8,26 @@ interface ExpenseChartProps {
 }
 
 export const ExpenseChart = ({ transactions }: ExpenseChartProps) => {
+  // Se não há transações, mostrar mensagem
+  if (transactions.length === 0) {
+    return (
+      <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-emerald-700">📊 Receitas vs Despesas</CardTitle>
+          <CardDescription>
+            Comparação mensal de entradas e saídas
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center h-64">
+          <div className="text-center text-gray-500">
+            <p className="text-lg font-medium">Nenhuma transação encontrada</p>
+            <p className="text-sm">Faça upload dos seus extratos para ver o comparativo</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Agrupar por mês
   const monthlyData = transactions.reduce((acc, transaction) => {
     const month = transaction.date.slice(0, 7);

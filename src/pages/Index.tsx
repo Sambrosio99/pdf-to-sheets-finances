@@ -18,7 +18,7 @@ import { Loader2 } from "lucide-react";
 
 export default function Index() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const { transactions, loading, addTransaction, addMultipleTransactions, updateTransaction, deleteTransaction } = useTransactions();
+  const { transactions, loading, addTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, refetch } = useTransactions();
 
   const [isAddingTransaction, setIsAddingTransaction] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -145,6 +145,8 @@ export default function Index() {
                   onDataExtracted={async (transactions) => {
                     setIsUploading(true);
                     await addMultipleTransactions(transactions);
+                    // Força atualização dos dados
+                    await refetch();
                     setIsUploading(false);
                   }}
                 />

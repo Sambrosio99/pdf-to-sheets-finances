@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Transaction } from "@/types/finance";
@@ -8,8 +7,37 @@ interface MonthlyEvolutionChartProps {
 }
 
 export const MonthlyEvolutionChart = ({ transactions }: MonthlyEvolutionChartProps) => {
+  // Filtrar apenas transações do último ano para evitar dados antigos
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  
+  const recentTransactions = transactions.filter(transaction => {
+    const transactionDate = new Date(transaction.date);
+    return transactionDate >= oneYearAgo;
+  });
+
+  // Se não há transações, mostrar mensagem
+  if (recentTransactions.length === 0) {
+    return (
+      <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-blue-700">📈 Evolução do Saldo</CardTitle>
+          <CardDescription>
+            Acompanhe a evolução do seu saldo ao longo do tempo
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center h-64">
+          <div className="text-center text-gray-500">
+            <p className="text-lg font-medium">Nenhuma transação encontrada</p>
+            <p className="text-sm">Faça upload dos seus extratos para ver a evolução</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Agrupar por mês e calcular saldo acumulado
-  const monthlyData = transactions.reduce((acc, transaction) => {
+  const monthlyData = recentTransactions.reduce((acc, transaction) => {
     const month = transaction.date.slice(0, 7);
     if (!acc[month]) {
       acc[month] = { month, income: 0, expenses: 0, balance: 0 };

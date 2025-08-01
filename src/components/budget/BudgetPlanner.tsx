@@ -30,7 +30,7 @@ export const BudgetPlanner = ({ transactions }: BudgetPlannerProps) => {
     t.type === 'expense' && t.date.startsWith(latestMonth)
   );
 
-  // Orçamento personalizado baseado na sua situação
+  // Orçamento personalizado baseado na sua situação (removido Compras Pessoais)
   const budgetPlanned = {
     'Faculdade': 509, // Gasto fixo conhecido
     'Celular': 40,    // Gasto fixo conhecido
@@ -38,7 +38,6 @@ export const BudgetPlanner = ({ transactions }: BudgetPlannerProps) => {
     'Transporte': 200,
     'Investimentos': 300, // 20% da renda para reserva + investimentos
     'Baixo Musical': 150, // Valor mensal para a meta do baixo
-    'Compras Pessoais': 150, // Roupas, fones, bonés etc
     'Outros': 100
   };
 

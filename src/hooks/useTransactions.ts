@@ -78,7 +78,38 @@ export const useTransactions = () => {
         firstTransaction: transactionList[0]
       });
 
-      const transactionsToInsert = transactionList.map(transaction => ({
+      // Buscar transações existentes para detectar duplicatas
+      const { data: existingTransactions } = await supabase
+        .from('transactions')
+        .select('date, description, amount, type, payment_method')
+        .eq('user_id', user?.id);
+
+      // Filtrar transações duplicadas
+      const newTransactions = transactionList.filter(newTx => {
+        const isDuplicate = existingTransactions?.some(existing => 
+          existing.date === newTx.date &&
+          existing.description.trim() === newTx.description.trim() &&
+          Math.abs(Number(existing.amount) - Number(newTx.amount)) < 0.01 &&
+          existing.type === newTx.type &&
+          existing.payment_method === newTx.paymentMethod
+        );
+        
+        if (isDuplicate) {
+          console.log("🔴 DUPLICATA DETECTADA:", newTx.description, newTx.amount);
+        }
+        
+        return !isDuplicate;
+      });
+
+      console.log(`📊 Filtradas: ${transactionList.length - newTransactions.length} duplicatas, ${newTransactions.length} novas transações`);
+
+      if (newTransactions.length === 0) {
+        console.log("useTransactions: Nenhuma transação nova para adicionar");
+        toast.info("Nenhuma transação nova encontrada (todas já existem)");
+        return;
+      }
+
+      const transactionsToInsert = newTransactions.map(transaction => ({
         user_id: user?.id,
         date: transaction.date,
         description: transaction.description,
@@ -110,7 +141,13 @@ export const useTransactions = () => {
       });
 
       await fetchTransactions();
-      toast.success(`${transactionList.length} transações adicionadas com sucesso!`);
+      
+      const duplicatesCount = transactionList.length - newTransactions.length;
+      if (duplicatesCount > 0) {
+        toast.success(`${newTransactions.length} transações novas adicionadas! (${duplicatesCount} duplicatas ignoradas)`);
+      } else {
+        toast.success(`${newTransactions.length} transações adicionadas com sucesso!`);
+      }
     } catch (error) {
       console.error('useTransactions: Erro ao adicionar múltiplas transações:', error);
       toast.error(`Erro ao adicionar transações em lote: ${error.message}`);

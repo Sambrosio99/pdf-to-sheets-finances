@@ -53,6 +53,36 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     return 'Outros';
   };
 
+  // Função para formatar e limpar valores monetários Nubank
+  const parseNubankValue = (valueStr: string): number => {
+    console.log("💰 Valor bruto recebido:", valueStr);
+    
+    // Remover símbolo de moeda, espaços e pontos de milhar
+    let cleaned = valueStr.toString()
+      .replace(/R\$\s*/g, '')  // Remove R$ e espaços
+      .replace(/\s+/g, '')     // Remove todos os espaços
+      .replace(/\./g, '');     // Remove pontos de milhar
+    
+    // Converter vírgula decimal para ponto
+    cleaned = cleaned.replace(',', '.');
+    
+    console.log("💰 Valor limpo:", cleaned);
+    
+    const numValue = parseFloat(cleaned);
+    
+    // Se o valor for inválido, retorna 0
+    if (isNaN(numValue)) {
+      console.log("❌ Valor inválido:", valueStr);
+      return 0;
+    }
+    
+    // SEMPRE dividir por 100 - valores do Nubank estão em centavos
+    const finalValue = numValue / 100;
+    console.log("✅ Valor final (centavos → reais):", finalValue);
+    
+    return finalValue;
+  };
+
   // Função para formatar data corretamente
   const formatDate = (dateStr: string): string => {
     console.log("🔧 Formatando data:", dateStr);
@@ -85,7 +115,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
       }
     }
     
-    // Se está no formato YYYY-MM-DD mas com barras
+    // Se está no formato YYYY/MM/DD
     if (cleanDate.match(/^\d{4}\/\d{1,2}\/\d{1,2}$/)) {
       const [year, month, day] = cleanDate.split('/');
       const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
@@ -140,9 +170,9 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
             if (columns.length >= 3) {
               const [dateStr, description, valueStr] = columns;
               
-              // 🔧 CORREÇÃO: Valores em centavos, dividir por 100
-              const rawValue = parseFloat(valueStr.replace(',', '.'));
-              const amount = Math.abs(rawValue / 100); // Converter centavos para reais
+              // 🔧 USAR FUNÇÃO ESPECÍFICA PARA TRATAR VALORES
+              const rawValue = parseNubankValue(valueStr);
+              const amount = Math.abs(rawValue); // Já convertido na função parseNubankValue
               
               // 🔧 DETECTAR ESTORNOS em faturas de cartão
               const isRefund = description.toLowerCase().includes('estorno') || 
@@ -231,9 +261,9 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                 // Usar função de formatação de data consistente
                 const formattedDate = formatDate(dateStr);
                 
-                // 🔧 CORREÇÃO: Valores do Nubank estão em centavos, dividir por 100
-                const rawValue = parseFloat(valueStr.replace(',', '.'));
-                const valueInReais = rawValue / 100; // Converter centavos para reais
+                // 🔧 USAR FUNÇÃO ESPECÍFICA PARA TRATAR VALORES NUBANK
+                const rawValue = parseNubankValue(valueStr);
+                const valueInReais = rawValue; // Já convertido na função parseNubankValue
                 
                 // 🔧 CORREÇÃO: Valores positivos = receita, negativos = despesa
                 const amount = Math.abs(valueInReais);

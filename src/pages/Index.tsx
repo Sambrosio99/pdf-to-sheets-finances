@@ -8,7 +8,7 @@ import { TransactionForm } from "@/components/transactions/TransactionForm";
 import { TransactionList } from "@/components/transactions/TransactionList";
 import { BudgetPlanner } from "@/components/budget/BudgetPlanner";
 import { FileUploader } from "@/components/upload/FileUploader";
-import { GoogleSheetsExport } from "@/components/export/GoogleSheetsExport";
+import { GoogleSheetsIntegration } from "@/components/export/GoogleSheetsIntegration";
 import { AdvancedReports } from "@/components/reports/AdvancedReports";
 import { PeriodComparison } from "@/components/reports/PeriodComparison";
 import { PasswordChangeForm } from "@/components/auth/PasswordChangeForm";
@@ -89,7 +89,7 @@ export default function Index() {
               📁 Upload
             </TabsTrigger>
             <TabsTrigger value="export" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white">
-              📤 Exportar CSV
+              📤 Exportar Dados
             </TabsTrigger>
             <TabsTrigger value="reports" className="data-[state=active]:bg-emerald-500 data-[state=active]:text-white">
               📄 Relatórios
@@ -163,7 +163,7 @@ export default function Index() {
           </TabsContent>
 
           <TabsContent value="export" className="space-y-6">
-            <GoogleSheetsExport transactions={transactions} />
+            <GoogleSheetsIntegration transactions={transactions} />
           </TabsContent>
 
           <TabsContent value="reports" className="space-y-6">

@@ -25,14 +25,14 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     if (desc.includes('wellhub') || desc.includes('academia') || desc.includes('gym')) return 'Academia';
     if (desc.includes('sociedade mineira de cultura') || desc.includes('puc') || desc.includes('faculdade') || desc.includes('universidade') || desc.includes('pontificia') || desc.includes('catolica')) return 'Faculdade';
     if (desc.includes('aliexpress') || desc.includes('amazon')) return 'Compras';
-    if (desc.includes('pagamento recebido') || desc.includes('estorno')) return 'Transferência Recebida';
+    if (desc.includes('pagamento recebido') || desc.includes('pix recebido') || desc.includes('transferência recebida')) return 'Transferência Recebida';
     if (desc.includes('iof') || desc.includes('juros') || desc.includes('multa')) return 'Taxas e Juros';
     
     // Gerais
     if (desc.includes('uber') || desc.includes('trip')) return 'Transporte';
     if (desc.includes('cafe') || desc.includes('lanche') || desc.includes('pastel') || desc.includes('supermercado')) return 'Alimentação';
     if (desc.includes('transferência recebida') || desc.includes('transferência') && desc.includes('recebida')) return 'Transferência Recebida';
-    if (desc.includes('transferência enviada') || desc.includes('pix')) return 'Transferência Enviada';
+    if (desc.includes('transferência enviada') || desc.includes('pix enviado') || desc.includes('pix') && !desc.includes('recebido')) return 'Transferência Enviada';
     if (desc.includes('pagamento') || desc.includes('boleto') || desc.includes('fatura')) return 'Pagamentos';
     if (desc.includes('cabeleireiro')) return 'Cuidados Pessoais';
     if (desc.includes('compra')) return 'Compras';
@@ -139,13 +139,22 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
             
             if (columns.length >= 3) {
               const [dateStr, description, valueStr] = columns;
-              const amount = Math.abs(parseFloat(valueStr.replace(',', '.')));
+              
+              // 🔧 CORREÇÃO: Valores em centavos, dividir por 100
+              const rawValue = parseFloat(valueStr.replace(',', '.'));
+              const amount = Math.abs(rawValue / 100); // Converter centavos para reais
               
               // 🔧 DETECTAR ESTORNOS em faturas de cartão
               const isRefund = description.toLowerCase().includes('estorno') || 
                               description.toLowerCase().includes('extorno');
               
-              if (!isNaN(amount) && amount > 0 && dateStr && description) {
+              // 🔧 IGNORAR valores zerados
+              if (amount === 0) {
+                console.log(`Fatura - linha ignorada - valor zerado: ${description}`);
+                continue;
+              }
+              
+              if (!isNaN(amount) && amount > 0 && dateStr && description.trim()) {
                 transactions.push({
                   date: formatDate(dateStr),
                   description: description.trim(),
@@ -155,6 +164,8 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                   type: isRefund ? 'income' : 'expense', // 🔧 ESTORNO = receita, resto = despesa
                   status: 'paid'
                 });
+                
+                console.log(`✅ Fatura processada: ${description} = R$ ${amount.toFixed(2)} (${isRefund ? 'estorno' : 'despesa'})`);
               }
             }
           }
@@ -220,18 +231,39 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                 // Usar função de formatação de data consistente
                 const formattedDate = formatDate(dateStr);
                 
-                // Converter valor
-                const numericValue = parseFloat(valueStr.replace(',', '.'));
-                const amount = Math.abs(numericValue);
-                const transactionType = numericValue >= 0 ? 'expense' : 'income'; // Nubank: positivo = gasto, negativo = recebimento
+                // 🔧 CORREÇÃO: Valores do Nubank estão em centavos, dividir por 100
+                const rawValue = parseFloat(valueStr.replace(',', '.'));
+                const valueInReais = rawValue / 100; // Converter centavos para reais
                 
-                // Categorizar automaticamente
+                // 🔧 CORREÇÃO: Valores positivos = receita, negativos = despesa
+                const amount = Math.abs(valueInReais);
+                const transactionType = rawValue > 0 ? 'income' : 'expense';
+                
+                // 🔧 CORREÇÃO: Ignorar transações zeradas (estornos que se cancelam)
+                if (amount === 0) {
+                  console.log(`Linha ${i + 1} ignorada - valor zerado (estorno): ${description}`);
+                  continue;
+                }
+                
+                // 🔧 VALIDAÇÃO: Verificar se não é duplicata óbvia
+                const isDuplicate = transactions.some(t => 
+                  t.date === formattedDate && 
+                  t.description === description.trim() && 
+                  Math.abs(t.amount - amount) < 0.01
+                );
+                
+                if (isDuplicate) {
+                  console.log(`Linha ${i + 1} ignorada - possível duplicata: ${description}`);
+                  continue;
+                }
+                
+                // Categorizar automaticamente - NÃO ignorar PIX, transferências, etc.
                 const category = categorizeTransaction(description);
                 const paymentMethod = getPaymentMethod(description);
                 
-                console.log(`Processando Nubank: Data=${formattedDate}, Valor=${amount}, Tipo=${transactionType}, Categoria=${category}, Descrição=${description}`);
+                console.log(`✅ Processando Nubank: Data=${formattedDate}, Valor Original=${rawValue} centavos, Valor Final=R$ ${amount.toFixed(2)}, Tipo=${transactionType}, Categoria=${category}, Descrição=${description}`);
                 
-                if (!isNaN(amount) && amount > 0 && dateStr && description) {
+                if (!isNaN(amount) && amount > 0 && dateStr && description.trim()) {
                   transactions.push({
                     date: formattedDate,
                     description: description.trim(),
@@ -242,7 +274,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                     status: 'paid'
                   });
                 } else {
-                  console.log(`Linha ${i + 1} ignorada - dados inválidos`);
+                  console.log(`❌ Linha ${i + 1} ignorada - dados inválidos`);
                 }
               }
               // Formato bancário tradicional: Data, Valor, Identificador, Descrição (4 colunas)
@@ -252,18 +284,39 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                 // Usar função de formatação de data consistente
                 const formattedDate = formatDate(dateStr);
                   
-                // Converter valor
-                const numericValue = parseFloat(valueStr.replace(',', '.'));
-                const amount = Math.abs(numericValue);
-                const transactionType = numericValue >= 0 ? 'income' : 'expense';
+                // 🔧 CORREÇÃO: Verificar se valores também estão em centavos
+                const rawValue = parseFloat(valueStr.replace(',', '.'));
                 
-                // Categorizar automaticamente
+                // Se valor for muito alto (>10000), provavelmente está em centavos
+                const valueInReais = rawValue > 10000 ? rawValue / 100 : rawValue;
+                const amount = Math.abs(valueInReais);
+                const transactionType = rawValue >= 0 ? 'income' : 'expense';
+                
+                // 🔧 CORREÇÃO: Ignorar transações zeradas
+                if (amount === 0) {
+                  console.log(`Linha ${i + 1} ignorada - valor zerado: ${description}`);
+                  continue;
+                }
+                
+                // 🔧 VALIDAÇÃO: Verificar duplicatas
+                const isDuplicate = transactions.some(t => 
+                  t.date === formattedDate && 
+                  t.description === description.trim() && 
+                  Math.abs(t.amount - amount) < 0.01
+                );
+                
+                if (isDuplicate) {
+                  console.log(`Linha ${i + 1} ignorada - possível duplicata: ${description}`);
+                  continue;
+                }
+                
+                // Categorizar automaticamente - NÃO ignorar nenhum tipo de transação
                 const category = categorizeTransaction(description);
                 const paymentMethod = getPaymentMethod(description);
                 
-                console.log(`Processando tradicional: Data=${formattedDate}, Valor=${amount}, Tipo=${transactionType}, Categoria=${category}`);
+                console.log(`✅ Processando tradicional: Data=${formattedDate}, Valor=R$ ${amount.toFixed(2)}, Tipo=${transactionType}, Categoria=${category}`);
                 
-                if (!isNaN(amount) && amount > 0 && dateStr && description) {
+                if (!isNaN(amount) && amount > 0 && dateStr && description.trim()) {
                   transactions.push({
                     date: formattedDate,
                     description: description.trim(),
@@ -274,7 +327,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                     status: 'paid'
                   });
                 } else {
-                  console.log(`Linha ${i + 1} ignorada - dados inválidos`);
+                  console.log(`❌ Linha ${i + 1} ignorada - dados inválidos`);
                 }
               }
             } else {
@@ -500,14 +553,14 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Sistema otimizado para múltiplos formatos:</strong>
+              <strong>Sistema corrigido para extratos do Nubank:</strong>
               <ul className="mt-2 space-y-1 text-sm">
-                <li>🔴 <strong>Faturas de Cartão:</strong> Arquivos com "fatura" ou "cartao" no nome → SEMPRE "Cartão de Crédito" (detecta estornos automaticamente)</li>
-                <li>🟢 <strong>Extratos Bancários:</strong> Outros arquivos → Detecta automaticamente o método de pagamento</li>
-                <li>✅ <strong>Nubank CSV:</strong> date, title, amount (formato detectado automaticamente)</li>
-                <li>✅ <strong>CSV bancário tradicional:</strong> Data, Valor, Identificador, Descrição</li>
-                <li>✅ <strong>Categorização inteligente:</strong> Nubank, Transporte, Alimentação, PIX, etc.</li>
-                <li>✅ <strong>Anti-duplicatas:</strong> Sistema evita importação de transações já existentes</li>
+                <li>💰 <strong>Valores em centavos:</strong> Todos os valores são automaticamente convertidos (divididos por 100)</li>
+                <li>📈 <strong>Tipos corretos:</strong> Valores positivos = receitas, negativos = despesas</li>
+                <li>🔄 <strong>Todas as transações:</strong> PIX, transferências, faturas - TUDO é importado</li>
+                <li>🚫 <strong>Anti-duplicatas:</strong> Remove transações idênticas e valores zerados</li>
+                <li>📊 <strong>Múltiplos arquivos:</strong> Combina todos os meses em um painel único</li>
+                <li>🎯 <strong>Categorização inteligente:</strong> Identifica automaticamente tipo e categoria</li>
               </ul>
             </AlertDescription>
           </Alert>

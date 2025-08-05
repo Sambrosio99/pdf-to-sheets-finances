@@ -76,11 +76,22 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
       return 0;
     }
     
-    // SEMPRE dividir por 100 - valores do Nubank estão em centavos
-    const finalValue = numValue / 100;
-    console.log("✅ Valor final (centavos → reais):", finalValue);
+    // CORREÇÃO: Verificar se já está em formato real ou centavos
+    // Se o valor tem mais de 2 casas decimais ou é muito grande, está em centavos
+    let finalValue;
     
-    return finalValue;
+    if (numValue > 1000 && !cleaned.includes('.')) {
+      // Valor sem ponto decimal e > 1000 = centavos
+      finalValue = numValue / 100;
+      console.log("✅ Convertido de centavos:", finalValue);
+    } else {
+      // Valor já em reais
+      finalValue = numValue;
+      console.log("✅ Valor já em reais:", finalValue);
+    }
+    
+    // Arredondar para 2 casas decimais para evitar problemas de precisão
+    return Math.round(finalValue * 100) / 100;
   };
 
   // Função para formatar data corretamente

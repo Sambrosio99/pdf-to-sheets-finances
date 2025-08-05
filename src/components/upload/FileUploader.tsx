@@ -220,7 +220,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
           console.log("Conteúdo do CSV:", text.substring(0, 500));
           
           const lines = text.split('\n').filter(line => line.trim());
-          console.log("Número de linhas:", lines.length);
+          console.log("🔍 DEBUG: Número de linhas no CSV:", lines.length);
           
           if (lines.length === 0) {
             throw new Error('Arquivo CSV vazio');
@@ -237,11 +237,18 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                            firstLine.toLowerCase().includes('title') &&
                            firstLine.toLowerCase().includes('amount'));
           
-          console.log("Primeira linha:", firstLine);
-          console.log("Tem cabeçalho:", hasHeader);
+          console.log("🔍 DEBUG: Primeira linha:", firstLine);
+          console.log("🔍 DEBUG: Tem cabeçalho:", hasHeader);
           
           const dataLines = hasHeader ? lines.slice(1) : lines;
-          console.log("Linhas de dados:", dataLines.length);
+          console.log("🔍 DEBUG: Linhas de dados para processar:", dataLines.length);
+          
+          // Contadores para análise final
+          let totalReceitas = 0;
+          let totalDespesas = 0;
+          let contadorReceitas = 0;
+          let contadorDespesas = 0;
+          let linhasIgnoradas = 0;
           
           for (let i = 0; i < dataLines.length; i++) {
             const line = dataLines[i];
@@ -249,7 +256,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
             // Split considerando que pode haver vírgulas dentro das aspas
             const columns = parseCSVLine(line);
             
-            console.log(`Linha ${i + 1}:`, columns);
+            console.log(`🔍 DEBUG Linha ${i + 1}:`, columns);
             
             if (columns.length >= 3) {
               // Formato Nubank: date, title, amount (3 colunas)
@@ -269,7 +276,8 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                 
                 // 🔧 CORREÇÃO: Ignorar transações zeradas (estornos que se cancelam)
                 if (amount === 0) {
-                  console.log(`Linha ${i + 1} ignorada - valor zerado (estorno): ${description}`);
+                  console.log(`⚠️ Linha ${i + 1} IGNORADA - valor zerado: ${description}`);
+                  linhasIgnoradas++;
                   continue;
                 }
                 
@@ -281,7 +289,8 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                 );
                 
                 if (isDuplicate) {
-                  console.log(`Linha ${i + 1} ignorada - possível duplicata: ${description}`);
+                  console.log(`⚠️ Linha ${i + 1} IGNORADA - duplicata: ${description}`);
+                  linhasIgnoradas++;
                   continue;
                 }
                 
@@ -289,7 +298,16 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                 const category = categorizeTransaction(description);
                 const paymentMethod = getPaymentMethod(description);
                 
-                console.log(`✅ Processando Nubank: Data=${formattedDate}, Valor Original=${rawValue} centavos, Valor Final=R$ ${amount.toFixed(2)}, Tipo=${transactionType}, Categoria=${category}, Descrição=${description}`);
+                // 📊 CONTABILIZAR PARA ANÁLISE
+                if (transactionType === 'income') {
+                  totalReceitas += amount;
+                  contadorReceitas++;
+                  console.log(`💰 RECEITA: R$ ${amount.toFixed(2)} - ${description}`);
+                } else {
+                  totalDespesas += amount;
+                  contadorDespesas++;
+                  console.log(`💸 DESPESA: R$ ${amount.toFixed(2)} - ${description}`);
+                }
                 
                 if (!isNaN(amount) && amount > 0 && dateStr && description.trim()) {
                   transactions.push({
@@ -302,7 +320,8 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                     status: 'paid'
                   });
                 } else {
-                  console.log(`❌ Linha ${i + 1} ignorada - dados inválidos`);
+                  console.log(`❌ Linha ${i + 1} IGNORADA - dados inválidos`);
+                  linhasIgnoradas++;
                 }
               }
               // Formato bancário tradicional: Data, Valor, Identificador, Descrição (4 colunas)
@@ -322,7 +341,8 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                 
                 // 🔧 CORREÇÃO: Ignorar transações zeradas
                 if (amount === 0) {
-                  console.log(`Linha ${i + 1} ignorada - valor zerado: ${description}`);
+                  console.log(`⚠️ Linha ${i + 1} IGNORADA - valor zerado: ${description}`);
+                  linhasIgnoradas++;
                   continue;
                 }
                 
@@ -334,7 +354,8 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                 );
                 
                 if (isDuplicate) {
-                  console.log(`Linha ${i + 1} ignorada - possível duplicata: ${description}`);
+                  console.log(`⚠️ Linha ${i + 1} IGNORADA - duplicata: ${description}`);
+                  linhasIgnoradas++;
                   continue;
                 }
                 
@@ -342,7 +363,16 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                 const category = categorizeTransaction(description);
                 const paymentMethod = getPaymentMethod(description);
                 
-                console.log(`✅ Processando tradicional: Data=${formattedDate}, Valor=R$ ${amount.toFixed(2)}, Tipo=${transactionType}, Categoria=${category}`);
+                // 📊 CONTABILIZAR PARA ANÁLISE
+                if (transactionType === 'income') {
+                  totalReceitas += amount;
+                  contadorReceitas++;
+                  console.log(`💰 RECEITA: R$ ${amount.toFixed(2)} - ${description}`);
+                } else {
+                  totalDespesas += amount;
+                  contadorDespesas++;
+                  console.log(`💸 DESPESA: R$ ${amount.toFixed(2)} - ${description}`);
+                }
                 
                 if (!isNaN(amount) && amount > 0 && dateStr && description.trim()) {
                   transactions.push({
@@ -355,15 +385,29 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                     status: 'paid'
                   });
                 } else {
-                  console.log(`❌ Linha ${i + 1} ignorada - dados inválidos`);
+                  console.log(`❌ Linha ${i + 1} IGNORADA - dados inválidos`);
+                  linhasIgnoradas++;
                 }
               }
             } else {
-              console.log(`Linha ${i + 1} ignorada - colunas insuficientes (${columns.length}) - necessário pelo menos 3 colunas`);
+              console.log(`⚠️ Linha ${i + 1} IGNORADA - colunas insuficientes (${columns.length})`);
+              linhasIgnoradas++;
             }
           }
           
-          console.log(`Total de transações extraídas: ${transactions.length}`);
+          // 📊 RELATÓRIO FINAL DETALHADO
+          console.log("=".repeat(50));
+          console.log("📊 RELATÓRIO FINAL DE EXTRAÇÃO:");
+          console.log(`📁 Arquivo: ${file.name}`);
+          console.log(`📋 Total de linhas processadas: ${dataLines.length}`);
+          console.log(`✅ Transações extraídas: ${transactions.length}`);
+          console.log(`⚠️ Linhas ignoradas: ${linhasIgnoradas}`);
+          console.log("─".repeat(30));
+          console.log(`💰 RECEITAS: ${contadorReceitas} transações = R$ ${totalReceitas.toFixed(2)}`);
+          console.log(`💸 DESPESAS: ${contadorDespesas} transações = R$ ${totalDespesas.toFixed(2)}`);
+          console.log(`💳 SALDO: R$ ${(totalReceitas - totalDespesas).toFixed(2)}`);
+          console.log("=".repeat(50));
+          
           resolve(transactions);
         } catch (error) {
           console.error("Erro ao processar CSV:", error);

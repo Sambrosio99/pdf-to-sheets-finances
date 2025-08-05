@@ -53,18 +53,16 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     return 'Outros';
   };
 
-  // Função para formatar e limpar valores monetários Nubank
+  // Função para formatar e limpar valores monetários Nubank (baseada no código correto fornecido)
   const parseNubankValue = (valueStr: string): number => {
     console.log("💰 Valor bruto recebido:", valueStr);
     
-    // Remover símbolo de moeda, espaços e pontos de milhar
-    let cleaned = valueStr.toString()
-      .replace(/R\$\s*/g, '')  // Remove R$ e espaços
-      .replace(/\s+/g, '')     // Remove todos os espaços
-      .replace(/\./g, '');     // Remove pontos de milhar
-    
-    // Converter vírgula decimal para ponto
-    cleaned = cleaned.replace(',', '.');
+    // Limpar conforme o código TypeScript fornecido
+    const cleaned = valueStr
+      .replace('R$', '')        // Remove R$
+      .replace(/\./g, '')       // Remove pontos de milhar
+      .replace(',', '.')        // Substitui vírgula por ponto decimal
+      .trim();                  // Remove espaços
     
     console.log("💰 Valor limpo:", cleaned);
     
@@ -76,22 +74,11 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
       return 0;
     }
     
-    // CORREÇÃO: Verificar se já está em formato real ou centavos
-    // Se o valor tem mais de 2 casas decimais ou é muito grande, está em centavos
-    let finalValue;
+    // SEMPRE dividir por 100 - valores do Nubank estão em centavos (conforme código fornecido)
+    const finalValue = numValue / 100;
+    console.log("✅ Valor convertido de centavos para reais:", finalValue);
     
-    if (numValue > 1000 && !cleaned.includes('.')) {
-      // Valor sem ponto decimal e > 1000 = centavos
-      finalValue = numValue / 100;
-      console.log("✅ Convertido de centavos:", finalValue);
-    } else {
-      // Valor já em reais
-      finalValue = numValue;
-      console.log("✅ Valor já em reais:", finalValue);
-    }
-    
-    // Arredondar para 2 casas decimais para evitar problemas de precisão
-    return Math.round(finalValue * 100) / 100;
+    return finalValue;
   };
 
   // Função para formatar data corretamente

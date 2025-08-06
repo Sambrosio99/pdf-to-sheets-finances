@@ -53,20 +53,20 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     return 'Outros';
   };
 
-  // Função para formatar e limpar valores monetários Nubank (baseada no código correto fornecido)
+  // Função para formatar e limpar valores monetários Nubank (correção implementada)
   const parseNubankValue = (valueStr: string): number => {
     console.log("💰 Valor bruto recebido:", valueStr);
     
-    // Limpar conforme o código TypeScript fornecido
-    const cleaned = valueStr
-      .replace('R$', '')        // Remove R$
-      .replace(/\./g, '')       // Remove pontos de milhar
-      .replace(',', '.')        // Substitui vírgula por ponto decimal
-      .trim();                  // Remove espaços
+    const cleaned = valueStr.replace('R$', '').trim();
     
-    console.log("💰 Valor limpo:", cleaned);
+    // Detecta se é formato centavos (número inteiro) ou reais (com vírgula/ponto)
+    const isCentavos = /^-?\d+$/.test(cleaned); // valor inteiro, ex: "320556"
+    const isReaisFormat = /[\.,]/.test(cleaned); // valor com vírgula ou ponto, ex: "3.205,56"
     
-    const numValue = parseFloat(cleaned);
+    console.log(`💰 Tipo detectado: ${isCentavos ? 'CENTAVOS' : 'REAIS'} para valor: ${cleaned}`);
+    
+    let parsed = cleaned.replace(/\./g, '').replace(',', '.');
+    const numValue = parseFloat(parsed);
     
     // Se o valor for inválido, retorna 0
     if (isNaN(numValue)) {
@@ -74,9 +74,14 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
       return 0;
     }
     
-    // SEMPRE dividir por 100 - valores do Nubank estão em centavos (conforme código fornecido)
-    const finalValue = numValue / 100;
-    console.log("✅ Valor convertido de centavos para reais:", finalValue);
+    let finalValue;
+    if (isCentavos) {
+      finalValue = numValue / 100; // formato centavos
+      console.log("✅ Valor convertido de centavos para reais:", finalValue);
+    } else {
+      finalValue = numValue; // já está em reais
+      console.log("✅ Valor já em reais:", finalValue);
+    }
     
     return finalValue;
   };

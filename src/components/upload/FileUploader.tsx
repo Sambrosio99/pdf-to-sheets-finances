@@ -53,37 +53,28 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     return 'Outros';
   };
 
-  // Função para formatar e limpar valores monetários Nubank (correção implementada)
-  const parseNubankValue = (valueStr: string): number => {
-    console.log("💰 Valor bruto recebido:", valueStr);
+  // Função para valores de EXTRATO (NU_*.csv) - valores em centavos
+  const parseExtratoValue = (valueStr: string): number => {
+    console.log("💰 [EXTRATO] Valor bruto:", valueStr);
+    const numValue = parseFloat(valueStr);
+    if (isNaN(numValue)) return 0;
     
+    const finalValue = numValue / 100; // SEMPRE dividir por 100 para extratos
+    console.log("✅ [EXTRATO] Convertido de centavos:", finalValue);
+    return finalValue;
+  };
+
+  // Função para valores de FATURA (Nubank_*.csv) - valores já em reais
+  const parseFaturaValue = (valueStr: string): number => {
+    console.log("💰 [FATURA] Valor bruto:", valueStr);
     const cleaned = valueStr.replace('R$', '').trim();
-    
-    // Detecta se é formato centavos (número inteiro) ou reais (com vírgula/ponto)
-    const isCentavos = /^-?\d+$/.test(cleaned); // valor inteiro, ex: "320556"
-    const isReaisFormat = /[\.,]/.test(cleaned); // valor com vírgula ou ponto, ex: "3.205,56"
-    
-    console.log(`💰 Tipo detectado: ${isCentavos ? 'CENTAVOS' : 'REAIS'} para valor: ${cleaned}`);
-    
-    let parsed = cleaned.replace(/\./g, '').replace(',', '.');
+    const parsed = cleaned.replace(/\./g, '').replace(',', '.');
     const numValue = parseFloat(parsed);
     
-    // Se o valor for inválido, retorna 0
-    if (isNaN(numValue)) {
-      console.log("❌ Valor inválido:", valueStr);
-      return 0;
-    }
+    if (isNaN(numValue)) return 0;
     
-    let finalValue;
-    if (isCentavos) {
-      finalValue = numValue / 100; // formato centavos
-      console.log("✅ Valor convertido de centavos para reais:", finalValue);
-    } else {
-      finalValue = numValue; // já está em reais
-      console.log("✅ Valor já em reais:", finalValue);
-    }
-    
-    return finalValue;
+    console.log("✅ [FATURA] Valor já em reais:", numValue);
+    return numValue; // NÃO dividir por 100 para faturas
   };
 
   // Função para formatar data corretamente
@@ -173,8 +164,8 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
             if (columns.length >= 3) {
               const [dateStr, description, valueStr] = columns;
               
-              // 🔧 USAR FUNÇÃO ESPECÍFICA PARA TRATAR VALORES
-              const rawValue = parseNubankValue(valueStr);
+              // 🔧 USAR FUNÇÃO ESPECÍFICA PARA TRATAR VALORES DE FATURA
+              const rawValue = parseFaturaValue(valueStr);
               const amount = Math.abs(rawValue); // Já convertido na função parseNubankValue
               
               // 🔧 DETECTAR ESTORNOS em faturas de cartão
@@ -217,6 +208,10 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
   const extractDataFromCSV = async (file: File): Promise<Omit<Transaction, 'id'>[]> => {
     console.log("Processando arquivo CSV:", file.name);
     
+    // 🔧 DETECTAR SE É EXTRATO (NU_*.csv) OU FATURA (Nubank_*.csv)
+    const isExtrato = file.name.includes('NU_');
+    console.log(`🔧 Arquivo detectado como: ${isExtrato ? 'EXTRATO (NU_*.csv)' : 'FATURA/GENÉRICO'}`);
+    
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -233,6 +228,42 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
 
           const transactions: Omit<Transaction, 'id'>[] = [];
           
+          // 🔧 EXTRATOS NUBANK (NU_*.csv) TÊM FORMATO ESPECIAL
+          if (isExtrato) {
+            console.log("🟡 PROCESSANDO EXTRATO - formato especial com `;`");
+            
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i];
+              
+              // Extratos usam `;` como separador principal
+              const [dataStr, valorStr, , descricao] = line.split(',');
+              
+              if (dataStr && valorStr && descricao) {
+                const valor = parseExtratoValue(valorStr); // Valores em centavos
+                const data = new Date(dataStr);
+                
+                if (!isNaN(valor) && !isNaN(data.getTime()) && valor !== 0) {
+                  transactions.push({
+                    date: formatDate(dataStr),
+                    description: descricao.trim(),
+                    category: categorizeTransaction(descricao),
+                    paymentMethod: getPaymentMethod(descricao),
+                    amount: Math.abs(valor),
+                    type: valor > 0 ? 'income' : 'expense',
+                    status: 'paid'
+                  });
+                  
+                  console.log(`✅ EXTRATO: ${descricao.trim()} = R$ ${Math.abs(valor).toFixed(2)} (${valor > 0 ? 'receita' : 'despesa'})`);
+                }
+              }
+            }
+            
+            console.log(`🟡 EXTRATO: ${transactions.length} transações extraídas`);
+            resolve(transactions);
+            return;
+          }
+          
+          // 🟢 PROCESSAMENTO NORMAL PARA OUTROS ARQUIVOS
           // Verificar se primeira linha é cabeçalho (formato tradicional ou Nubank)
           const firstLine = lines[0];
           const hasHeader = (firstLine.toLowerCase().includes('data') && 
@@ -271,8 +302,9 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
                 // Usar função de formatação de data consistente
                 const formattedDate = formatDate(dateStr);
                 
-                // 🔧 USAR FUNÇÃO ESPECÍFICA PARA TRATAR VALORES NUBANK
-                const rawValue = parseNubankValue(valueStr);
+                // 🔧 DETECTAR TIPO DE ARQUIVO E USAR FUNÇÃO APROPRIADA
+                const isExtrato = file.name.includes('NU_');
+                const rawValue = isExtrato ? parseExtratoValue(valueStr) : parseFaturaValue(valueStr);
                 const valueInReais = rawValue; // Já convertido na função parseNubankValue
                 
                 // 🔧 CORREÇÃO: Valores positivos = receita, negativos = despesa
@@ -483,16 +515,21 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
               }
             ];
           } else {
-            // Detectar se é fatura de cartão ou extrato bancário pelo nome do arquivo
+            // 🔧 DETECTAR TIPO DE ARQUIVO NUBANK CORRETAMENTE
+            const isExtrato = file.name.includes('NU_');  // Extrato da conta
+            const isFatura = file.name.includes('Nubank_'); // Fatura do cartão
             const isCreditCardBill = file.name.toLowerCase().includes('fatura') || 
                                    file.name.toLowerCase().includes('cartao') ||
                                    file.name.toLowerCase().includes('invoice');
             
-            if (isCreditCardBill) {
-              console.log("🔴 PROCESSANDO COMO FATURA DE CARTÃO");
+            if (isFatura || isCreditCardBill) {
+              console.log("🔴 PROCESSANDO COMO FATURA DE CARTÃO (Nubank_*.csv)");
               transactions = await extractCreditCardData(file);
+            } else if (isExtrato) {
+              console.log("🟡 PROCESSANDO COMO EXTRATO BANCÁRIO (NU_*.csv) - valores em centavos");
+              transactions = await extractDataFromCSV(file);
             } else {
-              console.log("🟢 PROCESSANDO COMO EXTRATO BANCÁRIO");
+              console.log("🟢 PROCESSANDO COMO CSV GENÉRICO");
               transactions = await extractDataFromCSV(file);
             }
           }

@@ -149,7 +149,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     
     const valor = parseNubankValue(valorStr);
     const amount = Math.abs(valor);
-    const type: 'income' | 'expense' = valor < 0 ? 'income' : 'expense';
+    const type: 'income' | 'expense' = valor < 0 || descricao?.toLowerCase().includes('estorno') ? 'income' : 'expense';
 
     const formattedDate = formatDate(dataStr.trim());
     // Verificar se a data foi formatada corretamente

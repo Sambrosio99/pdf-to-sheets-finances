@@ -26,17 +26,17 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     status: 'paid';
   }
 
-  // ✅ CORREÇÃO: Detecção inteligente do formato
+  // Detecta e converte valores para reais com base no formato
   function parseNubankValue(valueStr: string): number {
     const cleaned = valueStr.replace('R$', '').trim();
 
     const isCentavos = /^-?\d+$/.test(cleaned); // Ex: "320556"
     const isReaisFormat = /^-?[\d\.]*\,\d{2}$/.test(cleaned); // Ex: "3.205,56"
-    const isDotDecimal = /^-?\d+\.\d{2}$/.test(cleaned); // Ex: "3205.56" ← já está em reais
+    const isDotDecimal = /^-?\d+\.\d{2}$/.test(cleaned); // Ex: "3205.56"
 
     if (isCentavos) return parseFloat(cleaned) / 100;
     if (isReaisFormat) return parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
-    if (isDotDecimal) return parseFloat(cleaned); // NÃO dividir!
+    if (isDotDecimal) return parseFloat(cleaned); // já está em reais
     return parseFloat(cleaned.replace(',', '.'));
   }
 
@@ -100,7 +100,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     };
   }
 
-  // ✅ AJUSTE NO parseFaturaLine PARA EVITAR CLASSIFICAR RECEITAS COMO DESPESAS
+  // Corrige tipo de transação em faturas
   function parseFaturaLine(line: string): Transacao | null {
     const parts = line.split(',');
     if (parts.length < 3) return null;
@@ -109,13 +109,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     const valor = parseNubankValue(valorStr);
     const amount = Math.abs(valor);
 
-    // ⚠️ Evitar que valores positivos como reembolso/estorno sejam classificados como despesa
-    let type: 'income' | 'expense';
-    if (descricao.toLowerCase().includes('estorno') || valor > 0) {
-      type = 'income';
-    } else {
-      type = 'expense';
-    }
+    const type: 'income' | 'expense' = valor < 0 ? 'income' : 'expense'; // Corrigido
 
     return {
       date: formatDate(dataStr),
@@ -139,16 +133,15 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     for (const line of dataLines) {
       const parsed = isExtrato ? parseExtratoLine(line) : parseFaturaLine(line);
       
-      // ✅ AJUSTE FINAL NO FILTRO DE TRANSAÇÕES
-      if (parsed && parsed.amount > 0) {
-        const isDuplicate = transactions.some(t =>
-          t.date === parsed.date &&
-          t.description === parsed.description &&
-          Math.abs(t.amount - parsed.amount) < 0.01
-        );
-        if (!isDuplicate) {
-          transactions.push(parsed);
-        }
+      if (!parsed || parsed.amount === 0) continue;
+
+      const isDuplicate = transactions.some(t =>
+        t.date === parsed.date &&
+        t.description === parsed.description &&
+        Math.abs(t.amount - parsed.amount) < 0.01
+      );
+      if (!isDuplicate) {
+        transactions.push(parsed);
       }
     }
     return transactions;

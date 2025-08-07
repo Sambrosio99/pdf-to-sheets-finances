@@ -42,16 +42,36 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
 
   // Normaliza data para formato YYYY-MM-DD
   function formatDate(dateStr: string): string {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-      const [d, m, y] = dateStr.split('/');
+    if (!dateStr) return '';
+    
+    const cleaned = dateStr.trim();
+    
+    // Já está no formato correto
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
+    
+    // Formato DD/MM/YYYY
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(cleaned)) {
+      const [d, m, y] = cleaned.split('/');
       return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
-    if (/^\d{4}\/\d{2}\/\d{2}$/.test(dateStr)) {
-      const [y, m, d] = dateStr.split('/');
+    
+    // Formato YYYY/MM/DD
+    if (/^\d{4}\/\d{2}\/\d{2}$/.test(cleaned)) {
+      const [y, m, d] = cleaned.split('/');
       return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
-    return dateStr;
+    
+    // Formato YYYY-MM-DD com separadores variados
+    if (/^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}$/.test(cleaned)) {
+      const parts = cleaned.split(/[-\/]/);
+      if (parts.length === 3) {
+        const [y, m, d] = parts;
+        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      }
+    }
+    
+    console.warn('Formato de data não reconhecido:', dateStr);
+    return '';
   }
 
   // Determina categoria com base na descrição
@@ -84,16 +104,30 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
   function parseExtratoLine(line: string): Transacao | null {
     const parts = line.split(',');
     if (parts.length < 4) return null;
+    
+    // Validar se não é cabeçalho
     const [dataStr, valorStr, , descricao] = parts;
+    if (dataStr.toLowerCase().includes('data') || dataStr === 'date') return null;
+    
+    // Validar formato de data
+    if (!dataStr || dataStr.trim() === '') return null;
+    
     const valor = parseFloat(valorStr) / 100;
     const amount = Math.abs(valor);
     const type = valor > 0 ? 'income' : 'expense';
 
+    const formattedDate = formatDate(dataStr.trim());
+    // Verificar se a data foi formatada corretamente
+    if (!formattedDate || formattedDate === dataStr.trim()) {
+      console.warn('Data inválida encontrada:', dataStr);
+      return null;
+    }
+
     return {
-      date: formatDate(dataStr),
-      description: descricao.trim(),
-      category: categorizeTransaction(descricao),
-      paymentMethod: getPaymentMethod(descricao),
+      date: formattedDate,
+      description: descricao?.trim() || 'Descrição não disponível',
+      category: categorizeTransaction(descricao || ''),
+      paymentMethod: getPaymentMethod(descricao || ''),
       amount,
       type,
       status: 'paid'
@@ -106,15 +140,28 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     if (parts.length < 3) return null;
 
     const [dataStr, descricao, valorStr] = parts;
+    
+    // Validar se não é cabeçalho
+    if (dataStr.toLowerCase().includes('data') || dataStr === 'date') return null;
+    
+    // Validar formato de data
+    if (!dataStr || dataStr.trim() === '') return null;
+    
     const valor = parseNubankValue(valorStr);
     const amount = Math.abs(valor);
+    const type: 'income' | 'expense' = valor < 0 ? 'income' : 'expense';
 
-    const type: 'income' | 'expense' = valor < 0 ? 'income' : 'expense'; // Corrigido
+    const formattedDate = formatDate(dataStr.trim());
+    // Verificar se a data foi formatada corretamente
+    if (!formattedDate || formattedDate === dataStr.trim()) {
+      console.warn('Data inválida encontrada:', dataStr);
+      return null;
+    }
 
     return {
-      date: formatDate(dataStr),
-      description: descricao.trim(),
-      category: categorizeTransaction(descricao),
+      date: formattedDate,
+      description: descricao?.trim() || 'Descrição não disponível',
+      category: categorizeTransaction(descricao || ''),
       paymentMethod: 'Cartão de Crédito',
       amount,
       type,

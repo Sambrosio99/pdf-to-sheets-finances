@@ -26,15 +26,17 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     status: 'paid';
   }
 
-  // Detecta e converte valores para reais com base no formato
+  // ✅ CORREÇÃO: Detecção inteligente do formato
   function parseNubankValue(valueStr: string): number {
     const cleaned = valueStr.replace('R$', '').trim();
 
-    const isCentavos = /^-?\d+$/.test(cleaned);             // ex: "320556"
-    const isReaisFormat = /^-?[\d\.]*\,\d{2}$/.test(cleaned); // ex: "3.205,56"
+    const isCentavos = /^-?\d+$/.test(cleaned); // Ex: "320556"
+    const isReaisFormat = /^-?[\d\.]*\,\d{2}$/.test(cleaned); // Ex: "3.205,56"
+    const isDotDecimal = /^-?\d+\.\d{2}$/.test(cleaned); // Ex: "3205.56" ← já está em reais
 
     if (isCentavos) return parseFloat(cleaned) / 100;
     if (isReaisFormat) return parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
+    if (isDotDecimal) return parseFloat(cleaned); // NÃO dividir!
     return parseFloat(cleaned.replace(',', '.'));
   }
 
@@ -98,14 +100,22 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     };
   }
 
-  // Interpreta linha CSV de fatura (Nubank_*.csv)
+  // ✅ AJUSTE NO parseFaturaLine PARA EVITAR CLASSIFICAR RECEITAS COMO DESPESAS
   function parseFaturaLine(line: string): Transacao | null {
     const parts = line.split(',');
     if (parts.length < 3) return null;
+
     const [dataStr, descricao, valorStr] = parts;
     const valor = parseNubankValue(valorStr);
     const amount = Math.abs(valor);
-    const type = descricao.toLowerCase().includes('estorno') ? 'income' : 'expense';
+
+    // ⚠️ Evitar que valores positivos como reembolso/estorno sejam classificados como despesa
+    let type: 'income' | 'expense';
+    if (descricao.toLowerCase().includes('estorno') || valor > 0) {
+      type = 'income';
+    } else {
+      type = 'expense';
+    }
 
     return {
       date: formatDate(dataStr),
@@ -118,7 +128,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     };
   }
 
-  // Função principal para processar CSV
+  // Exportável para uso na IA
   function parseCSVFile(fileContent: string, fileName: string): Transacao[] {
     const lines = fileContent.split('\n').filter(l => l.trim());
     const isExtrato = fileName.includes('NU_');
@@ -128,7 +138,18 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     const transactions: Transacao[] = [];
     for (const line of dataLines) {
       const parsed = isExtrato ? parseExtratoLine(line) : parseFaturaLine(line);
-      if (parsed && parsed.amount > 0) transactions.push(parsed);
+      
+      // ✅ AJUSTE FINAL NO FILTRO DE TRANSAÇÕES
+      if (parsed && parsed.amount > 0) {
+        const isDuplicate = transactions.some(t =>
+          t.date === parsed.date &&
+          t.description === parsed.description &&
+          Math.abs(t.amount - parsed.amount) < 0.01
+        );
+        if (!isDuplicate) {
+          transactions.push(parsed);
+        }
+      }
     }
     return transactions;
   }
@@ -224,7 +245,7 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
               console.log("🟡 PROCESSANDO COMO EXTRATO BANCÁRIO (NU_*.csv) - valores em centavos");
               transactions = await extractDataFromCSV(file);
             } else {
-              console.log("🟢 PROCESSANDO COMO CSV GENÉRICO");
+              console.log("🟢 PROCESSANDO COMO CSV GENÉRICO/FATURA - valores já convertidos");
               transactions = await extractDataFromCSV(file);
             }
           }
@@ -362,13 +383,13 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Sistema corrigido para extratos do Nubank:</strong>
+              <strong>✅ Sistema CORRIGIDO para extratos do Nubank:</strong>
               <ul className="mt-2 space-y-1 text-sm">
-                <li>💰 <strong>Valores em centavos:</strong> Todos os valores são automaticamente convertidos (divididos por 100)</li>
-                <li>📈 <strong>Tipos corretos:</strong> Valores positivos = receitas, negativos = despesas</li>
-                <li>🔄 <strong>Todas as transações:</strong> PIX, transferências, faturas - TUDO é importado</li>
+                <li>🔧 <strong>Detecção inteligente de formato:</strong> Diferencia centavos vs. valores em reais</li>
+                <li>💰 <strong>Valores de extrato:</strong> Automaticamente divididos por 100 (formato centavos)</li>
+                <li>💳 <strong>Valores de fatura:</strong> Mantidos como estão (já em formato reais)</li>
+                <li>📈 <strong>Tipos corretos:</strong> Estornos e valores positivos = receitas</li>
                 <li>🚫 <strong>Anti-duplicatas:</strong> Remove transações idênticas e valores zerados</li>
-                <li>📊 <strong>Múltiplos arquivos:</strong> Combina todos os meses em um painel único</li>
                 <li>🎯 <strong>Categorização inteligente:</strong> Identifica automaticamente tipo e categoria</li>
               </ul>
             </AlertDescription>

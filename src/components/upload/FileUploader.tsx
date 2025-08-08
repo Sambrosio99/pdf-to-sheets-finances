@@ -104,12 +104,20 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     const [dataStr, valorStr, , descricao] = line.split(',');
     if (!dataStr || !valorStr || !descricao) return null;
 
-    const valor = parseFloat(valorStr) / 100; // sempre centavos
-    const amount = Math.abs(valor);
+    // Ignorar cabeçalho
+    if (/^\s*(data|date)\s*$/i.test(dataStr)) return null;
+
+    const d = formatDate(dataStr.trim());
+    if (!d) return null;
+
+    const valor = parseFloat(valorStr);
+    if (Number.isNaN(valor)) return null;
+
+    const amount = Math.abs(valor / 100); // sempre centavos
     const type = valor > 0 ? 'income' : 'expense';
 
     return {
-      date: formatDate(dataStr),
+      date: d,
       description: descricao.trim(),
       category: categorizeTransaction(descricao),
       paymentMethod: getPaymentMethod(descricao),
@@ -124,14 +132,21 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     const [dataStr, descricao, valorStr] = line.split(',');
     if (!dataStr || !descricao || !valorStr) return null;
 
+    // Ignorar cabeçalho
+    if (/^\s*(data|date)\s*$/i.test(dataStr)) return null;
+
+    const d = formatDate(dataStr.trim());
+    if (!d) return null;
+
     const valor = parseNubankValue(valorStr);
+    if (Number.isNaN(valor)) return null;
     const amount = Math.abs(valor);
 
     const type: 'income' | 'expense' =
       valor < 0 || descricao.toLowerCase().includes('estorno') ? 'income' : 'expense';
 
     return {
-      date: formatDate(dataStr),
+      date: d,
       description: descricao.trim(),
       category: categorizeTransaction(descricao),
       paymentMethod: 'Cartão de Crédito',
@@ -145,14 +160,27 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
   function parseCSVFile(fileContent: string, fileName: string): Transacao[] {
     const lines = fileContent.split('\n').filter(l => l.trim());
     const isExtrato = fileName.includes('NU_');
-    const isFatura = fileName.includes('Nubank_');
-    const dataLines = lines[0].toLowerCase().includes('data') ? lines.slice(1) : lines;
+
+    // Detecção robusta de cabeçalho (português/inglês)
+    const firstCell = lines[0]?.split(',')[0]?.trim().toLowerCase() || '';
+    const hasHeader = firstCell === 'data' || firstCell === 'date';
+    const dataLines = hasHeader ? lines.slice(1) : lines;
 
     const transactions: Transacao[] = [];
-    for (const line of dataLines) {
+    for (const rawLine of dataLines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      // Ignorar qualquer linha de cabeçalho remanescente
+      const first = line.split(',')[0]?.trim().toLowerCase();
+      if (first === 'data' || first === 'date' || first === 'titulo' || first === 'title') continue;
+
       const parsed = isExtrato ? parseExtratoLine(line) : parseFaturaLine(line);
-      
-      if (!parsed || parsed.amount === 0) continue;
+      if (!parsed) continue;
+
+      // Validar data e valor antes de aceitar
+      if (!parsed.date || !/^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) continue;
+      if (!Number.isFinite(parsed.amount) || Number.isNaN(parsed.amount) || parsed.amount === 0) continue;
 
       const isDuplicate = transactions.some(t =>
         t.date === parsed.date &&

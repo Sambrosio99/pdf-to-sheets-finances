@@ -29,14 +29,13 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
   // Detecta e converte valores para reais com base no formato
   function parseNubankValue(valueStr: string): number {
     const cleaned = valueStr.replace('R$', '').trim();
-
-    const isCentavos = /^-?\d+$/.test(cleaned); // Ex: "320556"
-    const isReaisFormat = /^-?[\d\.]*\,\d{2}$/.test(cleaned); // Ex: "3.205,56"
-    const isDotDecimal = /^-?\d+\.\d{2}$/.test(cleaned); // Ex: "3205.56"
+    const isCentavos = /^-?\d+$/.test(cleaned);
+    const isReaisFormat = /^-?[\d\.]*\,\d{2}$/.test(cleaned);
+    const isDotDecimal = /^-?\d+\.\d{2}$/.test(cleaned);
 
     if (isCentavos) return parseFloat(cleaned) / 100;
     if (isReaisFormat) return parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
-    if (isDotDecimal) return parseFloat(cleaned); // já está em reais
+    if (isDotDecimal) return parseFloat(cleaned);
     return parseFloat(cleaned.replace(',', '.'));
   }
 
@@ -102,32 +101,18 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
 
   // Interpreta linha CSV de extrato (NU_*.csv)
   function parseExtratoLine(line: string): Transacao | null {
-    const parts = line.split(',');
-    if (parts.length < 4) return null;
-    
-    // Validar se não é cabeçalho
-    const [dataStr, valorStr, , descricao] = parts;
-    if (dataStr.toLowerCase().includes('data') || dataStr === 'date') return null;
-    
-    // Validar formato de data
-    if (!dataStr || dataStr.trim() === '') return null;
-    
-    const valor = parseFloat(valorStr) / 100;
+    const [dataStr, valorStr, , descricao] = line.split(',');
+    if (!dataStr || !valorStr || !descricao) return null;
+
+    const valor = parseFloat(valorStr) / 100; // sempre centavos
     const amount = Math.abs(valor);
     const type = valor > 0 ? 'income' : 'expense';
 
-    const formattedDate = formatDate(dataStr.trim());
-    // Verificar se a data foi formatada corretamente
-    if (!formattedDate || formattedDate === dataStr.trim()) {
-      console.warn('Data inválida encontrada:', dataStr);
-      return null;
-    }
-
     return {
-      date: formattedDate,
-      description: descricao?.trim() || 'Descrição não disponível',
-      category: categorizeTransaction(descricao || ''),
-      paymentMethod: getPaymentMethod(descricao || ''),
+      date: formatDate(dataStr),
+      description: descricao.trim(),
+      category: categorizeTransaction(descricao),
+      paymentMethod: getPaymentMethod(descricao),
       amount,
       type,
       status: 'paid'
@@ -136,32 +121,19 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
 
   // Corrige tipo de transação em faturas
   function parseFaturaLine(line: string): Transacao | null {
-    const parts = line.split(',');
-    if (parts.length < 3) return null;
+    const [dataStr, descricao, valorStr] = line.split(',');
+    if (!dataStr || !descricao || !valorStr) return null;
 
-    const [dataStr, descricao, valorStr] = parts;
-    
-    // Validar se não é cabeçalho
-    if (dataStr.toLowerCase().includes('data') || dataStr === 'date') return null;
-    
-    // Validar formato de data
-    if (!dataStr || dataStr.trim() === '') return null;
-    
     const valor = parseNubankValue(valorStr);
     const amount = Math.abs(valor);
-    const type: 'income' | 'expense' = valor < 0 || descricao?.toLowerCase().includes('estorno') ? 'income' : 'expense';
 
-    const formattedDate = formatDate(dataStr.trim());
-    // Verificar se a data foi formatada corretamente
-    if (!formattedDate || formattedDate === dataStr.trim()) {
-      console.warn('Data inválida encontrada:', dataStr);
-      return null;
-    }
+    const type: 'income' | 'expense' =
+      valor < 0 || descricao.toLowerCase().includes('estorno') ? 'income' : 'expense';
 
     return {
-      date: formattedDate,
-      description: descricao?.trim() || 'Descrição não disponível',
-      category: categorizeTransaction(descricao || ''),
+      date: formatDate(dataStr),
+      description: descricao.trim(),
+      category: categorizeTransaction(descricao),
       paymentMethod: 'Cartão de Crédito',
       amount,
       type,

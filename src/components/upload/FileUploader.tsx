@@ -73,6 +73,29 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     return '';
   }
 
+  // Split seguro para CSV: suporta aspas, vírgulas/; e "" como escape
+  function splitCSVSafe(line: string): string[] {
+    const out: string[] = [];
+    let cur = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        // toggle aspas (suporta "" como escape)
+        if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+        else inQuotes = !inQuotes;
+      } else if (!inQuotes && (ch === ',' || ch === ';')) {
+        out.push(cur.trim().replace(/^"|"$/g, ''));
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    out.push(cur.trim().replace(/^"|"$/g, ''));
+    return out;
+  }
+
   // Determina categoria com base na descrição
   function categorizeTransaction(description: string): string {
     const desc = description.toLowerCase();
@@ -101,20 +124,29 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
 
   // Interpreta linha CSV de extrato (NU_*.csv)
   function parseExtratoLine(line: string): Transacao | null {
-    const [dataStr, valorStr, , descricao] = line.split(',');
-    if (!dataStr || !valorStr || !descricao) return null;
+    // normaliza CRLF e faz split seguro
+    const cols = splitCSVSafe(line.replace(/\r$/, ''));
 
-    // Ignorar cabeçalho
+    // Alguns extratos vêm com ';' embrulhando a linha CSV real no primeiro campo
+    let parts = cols;
+    if (parts.length === 1 && parts[0].includes(',')) {
+      parts = splitCSVSafe(parts[0]);
+    }
+    if (parts.length < 4) return null;
+
+    const [dataStr, valorStr, , descricao] = parts;
+    if (!dataStr || !valorStr || !descricao) return null;
     if (/^\s*(data|date)\s*$/i.test(dataStr)) return null;
 
     const d = formatDate(dataStr.trim());
     if (!d) return null;
 
-    const valor = parseFloat(valorStr);
-    if (Number.isNaN(valor)) return null;
+    const raw = Number(valorStr.replace(/\s+/g, ''));
+    if (!Number.isFinite(raw)) return null;
 
-    const amount = Math.abs(valor / 100); // sempre centavos
-    const type = valor > 0 ? 'income' : 'expense';
+    const valor = raw / 100; // sempre centavos
+    const amount = Math.abs(valor);
+    const type: 'income' | 'expense' = valor > 0 ? 'income' : 'expense';
 
     return {
       date: d,
@@ -129,7 +161,10 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
 
   // Corrige tipo de transação em faturas
   function parseFaturaLine(line: string): Transacao | null {
-    const [dataStr, descricao, valorStr] = line.split(',');
+    const parts = splitCSVSafe(line.replace(/\r$/, ''));
+    if (parts.length < 3) return null;
+
+    const [dataStr, descricao, valorStr] = parts;
     if (!dataStr || !descricao || !valorStr) return null;
 
     // Ignorar cabeçalho
@@ -139,7 +174,8 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
     if (!d) return null;
 
     const valor = parseNubankValue(valorStr);
-    if (Number.isNaN(valor)) return null;
+    if (!Number.isFinite(valor)) return null;
+
     const amount = Math.abs(valor);
 
     const type: 'income' | 'expense' =
@@ -158,11 +194,12 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
 
   // Exportável para uso na IA
   function parseCSVFile(fileContent: string, fileName: string): Transacao[] {
-    const lines = fileContent.split('\n').filter(l => l.trim());
+    // Normaliza CRLF e remove linhas vazias
+    const lines = fileContent.replace(/\r/g, '').split('\n').filter(Boolean);
     const isExtrato = fileName.includes('NU_');
 
-    // Detecção robusta de cabeçalho (português/inglês)
-    const firstCell = lines[0]?.split(',')[0]?.trim().toLowerCase() || '';
+    // Remover cabeçalho se existir (suporta 'data'/'date')
+    const firstCell = splitCSVSafe(lines[0] || '')[0]?.trim().toLowerCase() || '';
     const hasHeader = firstCell === 'data' || firstCell === 'date';
     const dataLines = hasHeader ? lines.slice(1) : lines;
 
@@ -172,15 +209,15 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
       if (!line) continue;
 
       // Ignorar qualquer linha de cabeçalho remanescente
-      const first = line.split(',')[0]?.trim().toLowerCase();
-      if (first === 'data' || first === 'date' || first === 'titulo' || first === 'title') continue;
+      const first = (splitCSVSafe(line)[0] || '').trim().toLowerCase();
+      if (['data','date','titulo','title'].includes(first)) continue;
 
       const parsed = isExtrato ? parseExtratoLine(line) : parseFaturaLine(line);
       if (!parsed) continue;
 
       // Validar data e valor antes de aceitar
       if (!parsed.date || !/^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) continue;
-      if (!Number.isFinite(parsed.amount) || Number.isNaN(parsed.amount) || parsed.amount === 0) continue;
+      if (!Number.isFinite(parsed.amount) || parsed.amount === 0) continue;
 
       const isDuplicate = transactions.some(t =>
         t.date === parsed.date &&

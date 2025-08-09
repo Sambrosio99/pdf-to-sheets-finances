@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Transaction } from "@/types/finance";
 import { Upload, FileText, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { parseCSVFile as parseNubankCSV, Transacao as NubankTransacao } from "@/lib/parsers/nubank";
+import { parseCSVFile as parseNubankCSV, Transacao as NubankTransacao, setNubankAuditFileMeta, printNubankAuditSummary } from "@/lib/parsers/nubank";
 
 interface FileUploaderProps {
   onDataExtracted: (transactions: Omit<Transaction, 'id'>[]) => void;
@@ -133,9 +133,11 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
             
             if (isExtrato) {
               console.log("🟡 PROCESSANDO COMO EXTRATO BANCÁRIO (NU_*.csv) - valores em centavos");
+              setNubankAuditFileMeta({ fileName: file.name, sizeBytes: file.size, mimeType: file.type });
               transactions = await extractDataFromCSV(file);
             } else {
               console.log("🟢 PROCESSANDO COMO CSV GENÉRICO/FATURA - valores já convertidos");
+              setNubankAuditFileMeta({ fileName: file.name, sizeBytes: file.size, mimeType: file.type });
               transactions = await extractDataFromCSV(file);
             }
           }
@@ -159,6 +161,8 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
       } else {
         toast.error("Nenhuma transação foi extraída dos arquivos");
       }
+      // Emitir relatório final de auditoria
+      printNubankAuditSummary();
       
     } catch (error) {
       console.error("Erro geral no upload:", error);

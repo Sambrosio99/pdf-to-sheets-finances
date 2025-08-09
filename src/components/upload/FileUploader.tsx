@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Transaction } from "@/types/finance";
 import { Upload, FileText, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { parseCSVFile as parseNubankCSV, Transacao as NubankTransacao } from "@/lib/parsers/nubank";
 
 interface FileUploaderProps {
   onDataExtracted: (transactions: Omit<Transaction, 'id'>[]) => void;
@@ -15,221 +16,23 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
 
-  // Interface para transações
-  interface Transacao {
-    date: string; // no formato YYYY-MM-DD
-    description: string;
-    category: string;
-    paymentMethod: string;
-    amount: number;
-    type: 'income' | 'expense';
-    status: 'paid';
-  }
-
-  // Detecta e converte valores para reais com base no formato
-  function parseNubankValue(valueStr: string): number {
-    const cleaned = valueStr.replace('R$', '').trim();
-    const isCentavos = /^-?\d+$/.test(cleaned);
-    const isReaisFormat = /^-?[\d\.]*\,\d{2}$/.test(cleaned);
-    const isDotDecimal = /^-?\d+\.\d{2}$/.test(cleaned);
-
-    if (isCentavos) return parseFloat(cleaned) / 100;
-    if (isReaisFormat) return parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
-    if (isDotDecimal) return parseFloat(cleaned);
-    return parseFloat(cleaned.replace(',', '.'));
-  }
-
-  // Normaliza data para formato YYYY-MM-DD
-  function formatDate(dateStr: string): string {
-    if (!dateStr) return '';
-    
-    const cleaned = dateStr.trim();
-    
-    // Já está no formato correto
-    if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
-    
-    // Formato DD/MM/YYYY
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(cleaned)) {
-      const [d, m, y] = cleaned.split('/');
-      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  // Parsing movido para util: src/lib/parsers/nubank.ts
+  // Self-test rápido (3 linhas de validação)
+  ;(() => {
+    try {
+      const extrato = "2025-07-15,320556,,Compra Supermercado";
+      const fatura = [
+        "data,descricao,valor",
+        '15/07/2025,"Assinatura Pro","3.205,56"',
+        '2025/07/15,"Restaurante, Sushi","3205.56"',
+      ].join("\n");
+      console.log("[Parser Test] Extrato:", parseNubankCSV(extrato, "NU_teste.csv"));
+      console.log("[Parser Test] Fatura:", parseNubankCSV(fatura, "Nubank_teste.csv"));
+    } catch (err) {
+      console.warn("[Parser Test] Falhou:", err);
     }
-    
-    // Formato YYYY/MM/DD
-    if (/^\d{4}\/\d{2}\/\d{2}$/.test(cleaned)) {
-      const [y, m, d] = cleaned.split('/');
-      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-    }
-    
-    // Formato YYYY-MM-DD com separadores variados
-    if (/^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}$/.test(cleaned)) {
-      const parts = cleaned.split(/[-\/]/);
-      if (parts.length === 3) {
-        const [y, m, d] = parts;
-        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-      }
-    }
-    
-    console.warn('Formato de data não reconhecido:', dateStr);
-    return '';
-  }
+  })();
 
-  // Split seguro para CSV: suporta aspas, vírgulas/; e "" como escape
-  function splitCSVSafe(line: string): string[] {
-    const out: string[] = [];
-    let cur = '';
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        // toggle aspas (suporta "" como escape)
-        if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
-        else inQuotes = !inQuotes;
-      } else if (!inQuotes && (ch === ',' || ch === ';')) {
-        out.push(cur.trim().replace(/^"|"$/g, ''));
-        cur = '';
-      } else {
-        cur += ch;
-      }
-    }
-    out.push(cur.trim().replace(/^"|"$/g, ''));
-    return out;
-  }
-
-  // Determina categoria com base na descrição
-  function categorizeTransaction(description: string): string {
-    const desc = description.toLowerCase();
-    if (desc.includes('google') || desc.includes('chatgpt') || desc.includes('lovable')) return 'Assinaturas';
-    if (desc.includes('uber') || desc.includes('trip')) return 'Transporte';
-    if (desc.includes('academia') || desc.includes('gym') || desc.includes('wellhub')) return 'Academia';
-    if (desc.includes('puc') || desc.includes('faculdade') || desc.includes('universidade')) return 'Faculdade';
-    if (desc.includes('aliexpress') || desc.includes('amazon') || desc.includes('compra')) return 'Compras';
-    if (desc.includes('pix recebido') || desc.includes('transferência recebida')) return 'Transferência Recebida';
-    if (desc.includes('pix enviado') || desc.includes('transferência enviada')) return 'Transferência Enviada';
-    if (desc.includes('boleto') || desc.includes('pagamento') || desc.includes('fatura')) return 'Pagamentos';
-    if (desc.includes('café') || desc.includes('lanche') || desc.includes('pastel')) return 'Alimentação';
-    return 'Outros';
-  }
-
-  // Detecta método de pagamento
-  function getPaymentMethod(description: string): string {
-    const desc = description.toLowerCase();
-    if (desc.includes('pix')) return 'PIX';
-    if (desc.includes('débito')) return 'Cartão de Débito';
-    if (desc.includes('crédito')) return 'Cartão de Crédito';
-    if (desc.includes('boleto')) return 'Boleto';
-    if (desc.includes('transferência')) return 'Transferência';
-    return 'Outros';
-  }
-
-  // Interpreta linha CSV de extrato (NU_*.csv)
-  function parseExtratoLine(line: string): Transacao | null {
-    // normaliza CRLF e faz split seguro
-    const cols = splitCSVSafe(line.replace(/\r$/, ''));
-
-    // Alguns extratos vêm com ';' embrulhando a linha CSV real no primeiro campo
-    let parts = cols;
-    if (parts.length === 1 && parts[0].includes(',')) {
-      parts = splitCSVSafe(parts[0]);
-    }
-    if (parts.length < 4) return null;
-
-    const [dataStr, valorStr, , descricao] = parts;
-    if (!dataStr || !valorStr || !descricao) return null;
-    if (/^\s*(data|date)\s*$/i.test(dataStr)) return null;
-
-    const d = formatDate(dataStr.trim());
-    if (!d) return null;
-
-    const raw = Number(valorStr.replace(/\s+/g, ''));
-    if (!Number.isFinite(raw)) return null;
-
-    const valor = raw / 100; // sempre centavos
-    const amount = Math.abs(valor);
-    const type: 'income' | 'expense' = valor > 0 ? 'income' : 'expense';
-
-    return {
-      date: d,
-      description: descricao.trim(),
-      category: categorizeTransaction(descricao),
-      paymentMethod: getPaymentMethod(descricao),
-      amount,
-      type,
-      status: 'paid'
-    };
-  }
-
-  // Corrige tipo de transação em faturas
-  function parseFaturaLine(line: string): Transacao | null {
-    const parts = splitCSVSafe(line.replace(/\r$/, ''));
-    if (parts.length < 3) return null;
-
-    const [dataStr, descricao, valorStr] = parts;
-    if (!dataStr || !descricao || !valorStr) return null;
-
-    // Ignorar cabeçalho
-    if (/^\s*(data|date)\s*$/i.test(dataStr)) return null;
-
-    const d = formatDate(dataStr.trim());
-    if (!d) return null;
-
-    const valor = parseNubankValue(valorStr);
-    if (!Number.isFinite(valor)) return null;
-
-    const amount = Math.abs(valor);
-
-    const type: 'income' | 'expense' =
-      valor < 0 || descricao.toLowerCase().includes('estorno') ? 'income' : 'expense';
-
-    return {
-      date: d,
-      description: descricao.trim(),
-      category: categorizeTransaction(descricao),
-      paymentMethod: 'Cartão de Crédito',
-      amount,
-      type,
-      status: 'paid'
-    };
-  }
-
-  // Exportável para uso na IA
-  function parseCSVFile(fileContent: string, fileName: string): Transacao[] {
-    // Normaliza CRLF e remove linhas vazias
-    const lines = fileContent.replace(/\r/g, '').split('\n').filter(Boolean);
-    const isExtrato = fileName.includes('NU_');
-
-    // Remover cabeçalho se existir (suporta 'data'/'date')
-    const firstCell = splitCSVSafe(lines[0] || '')[0]?.trim().toLowerCase() || '';
-    const hasHeader = firstCell === 'data' || firstCell === 'date';
-    const dataLines = hasHeader ? lines.slice(1) : lines;
-
-    const transactions: Transacao[] = [];
-    for (const rawLine of dataLines) {
-      const line = rawLine.trim();
-      if (!line) continue;
-
-      // Ignorar qualquer linha de cabeçalho remanescente
-      const first = (splitCSVSafe(line)[0] || '').trim().toLowerCase();
-      if (['data','date','titulo','title'].includes(first)) continue;
-
-      const parsed = isExtrato ? parseExtratoLine(line) : parseFaturaLine(line);
-      if (!parsed) continue;
-
-      // Validar data e valor antes de aceitar
-      if (!parsed.date || !/^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) continue;
-      if (!Number.isFinite(parsed.amount) || parsed.amount === 0) continue;
-
-      const isDuplicate = transactions.some(t =>
-        t.date === parsed.date &&
-        t.description === parsed.description &&
-        Math.abs(t.amount - parsed.amount) < 0.01
-      );
-      if (!isDuplicate) {
-        transactions.push(parsed);
-      }
-    }
-    return transactions;
-  }
 
   // Função melhorada para extrair dados de CSV
   const extractDataFromCSV = async (file: File): Promise<Omit<Transaction, 'id'>[]> => {
@@ -240,9 +43,19 @@ export const FileUploader = ({ onDataExtracted }: FileUploaderProps) => {
       reader.onload = (e) => {
         try {
           const text = e.target?.result as string;
-          const transactions = parseCSVFile(text, file.name);
+          const parsed: NubankTransacao[] = parseNubankCSV(text, file.name);
+          const included = parsed.filter(t => t.includeInTotals);
+          const transactions: Omit<Transaction, 'id'>[] = included.map(t => ({
+            date: t.date,
+            description: t.description,
+            category: t.category,
+            paymentMethod: t.paymentMethod,
+            amount: t.amount,
+            type: t.type,
+            status: t.status
+          }));
           
-          console.log(`✅ ${file.name}: ${transactions.length} transações extraídas`);
+          console.log(`✅ ${file.name}: ${transactions.length} transações extraídas (fatura excluída dos totais)`);
           resolve(transactions);
         } catch (error) {
           reject(error);

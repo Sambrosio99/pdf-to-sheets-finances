@@ -230,10 +230,20 @@ function parseExtratoLine(rawLine: string): Transacao | null {
   const date = formatDate(dataStr);
   if (!date) return null;
 
-  const raw = Number(String(valorStr).replace(/\s+/g, ''));
-  if (!Number.isFinite(raw)) return null;
-
-  const valor = raw / 100;                     // centavos → reais
+  // Para extratos, tentar detectar se já vem em reais ou centavos
+  let valor: number;
+  
+  // Se contém vírgula ou ponto decimal, provavelmente já está em reais
+  if (valorStr.includes(',') || valorStr.includes('.')) {
+    valor = parseNubankValue(valorStr);
+  } else {
+    // Número puro, assumir centavos
+    const raw = Number(String(valorStr).replace(/\s+/g, ''));
+    if (!Number.isFinite(raw)) return null;
+    valor = raw / 100;
+  }
+  
+  if (!Number.isFinite(valor)) return null;
   const amount = Math.abs(valor);
   if (amount === 0) return null;
 

@@ -216,7 +216,25 @@ function getPaymentMethod(description: string): string {
 
 // ===================== Parsers por arquivo =====================
 
-// Extrato NU_*.csv → sempre centavos
+// Extrato: interpretar valor de forma robusta.
+// Regra: extrato NU_* é centavos por padrão.
+// Se vier claramente em reais (vírgula/ponto com 2 decimais), usamos como reais.
+function parseExtratoValor(valorStr: string): number {
+  const s = (valorStr ?? '').replace('R$', '').trim();
+
+  const isCentavos   = /^-?\d+$/.test(s);                 // "320556" ou "-294740"
+  const isReaisBR    = /^-?[\d\.]*\,\d{2}$/.test(s);      // "3.205,56"  ou "-32,50"
+  const isDotDecimal = /^-?\d+\.\d{2}$/.test(s);          // "3205.56"   ou "-32.50"
+
+  if (isReaisBR)    return parseFloat(s.replace(/\./g, '').replace(',', '.')); // reais (vírgula)
+  if (isDotDecimal) return parseFloat(s);                                        // reais (ponto)
+  if (isCentavos)   return parseInt(s, 10) / 100;                                // centavos
+  // fallback (última tentativa)
+  const n = Number(s.replace(',', '.'));
+  return Number.isFinite(n) ? n : NaN;
+}
+
+// Extrato NU_*.csv → usa parseExtratoValor
 function parseExtratoLine(rawLine: string): Transacao | null {
   const parts0 = splitCSVSafe(rawLine.replace(/\r$/, ''));
   // Alguns NU_* vêm com ';' embrulhando tudo no primeiro campo
@@ -230,20 +248,9 @@ function parseExtratoLine(rawLine: string): Transacao | null {
   const date = formatDate(dataStr);
   if (!date) return null;
 
-  // Para extratos, tentar detectar se já vem em reais ou centavos
-  let valor: number;
-  
-  // Se contém vírgula ou ponto decimal, provavelmente já está em reais
-  if (valorStr.includes(',') || valorStr.includes('.')) {
-    valor = parseNubankValue(valorStr);
-  } else {
-    // Número puro, assumir centavos
-    const raw = Number(String(valorStr).replace(/\s+/g, ''));
-    if (!Number.isFinite(raw)) return null;
-    valor = raw / 100;
-  }
-  
+  const valor = parseExtratoValor(valorStr);
   if (!Number.isFinite(valor)) return null;
+
   const amount = Math.abs(valor);
   if (amount === 0) return null;
 

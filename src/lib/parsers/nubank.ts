@@ -386,23 +386,49 @@ export function parseCSVFile(fileContent: string, fileName: string): Transacao[]
     const parts0 = splitCSVSafe(rawLine.replace(/\r$/, ''));
     if (parts0.length === 1 && parts0[0].includes(',')) unwrappedEmbeddedCSV = true;
 
-    const parsed = isExtrato ? parseExtratoLine(rawLine) : parseFaturaLine(rawLine);
-    if (!parsed) {
-      if (!isExtrato && !isFatura) {
-        const len = parts0.length;
-        const fallbackParsed = (len >= 4) ? parseExtratoLine(rawLine) : (len >= 3 ? parseFaturaLine(rawLine) : null);
-        if (!fallbackParsed) continue;
-      } else {
-        continue;
-      }
+    // Primeiro tenta pelo tipo detectado do arquivo
+    let parsed = isExtrato ? parseExtratoLine(rawLine) : parseFaturaLine(rawLine);
+    
+    // Se não conseguiu detectar o tipo pelo nome do arquivo, tenta ambos os formatos
+    if (!parsed && !isExtrato && !isFatura) {
+      const len = parts0.length;
+      parsed = (len >= 4) ? parseExtratoLine(rawLine) : (len >= 3 ? parseFaturaLine(rawLine) : null);
     }
-    const tx = (parsed || ({} as Transacao));
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(tx.date)) { invalidDate++; continue; }
-    if (!Number.isFinite(tx.amount)) { invalidValue++; continue; }
-    if (tx.amount === 0) { zeroAmount++; continue; }
+    
+    // Se ainda não conseguiu fazer parse, pula a linha mas registra no audit
+    if (!parsed) {
+      if (AUDIT_MODE) console.log(`[SKIP] Linha ${idx + 1}: Não foi possível fazer parse: ${rawLine.substring(0, 100)}...`);
+      continue;
+    }
 
-    const key = `${tx.date}||${tx.description}||${tx.amount.toFixed(2)}||${tx.origin}`;
-    if (seen.has(key)) { duplicates++; continue; }
+    const tx = parsed;
+    
+    // Validações mais flexíveis
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tx.date)) { 
+      if (AUDIT_MODE) console.log(`[SKIP] Linha ${idx + 1}: Data inválida: ${tx.date}`);
+      invalidDate++; 
+      continue; 
+    }
+    
+    if (!Number.isFinite(tx.amount) || tx.amount < 0) { 
+      if (AUDIT_MODE) console.log(`[SKIP] Linha ${idx + 1}: Valor inválido: ${tx.amount}`);
+      invalidValue++; 
+      continue; 
+    }
+    
+    if (tx.amount === 0) { 
+      if (AUDIT_MODE) console.log(`[SKIP] Linha ${idx + 1}: Valor zero: ${tx.amount}`);
+      zeroAmount++; 
+      continue; 
+    }
+
+    // Chave mais robusta para duplicatas (sem incluir origin para evitar falsos positivos)
+    const key = `${tx.date}||${tx.description.toLowerCase().trim()}||${tx.amount.toFixed(2)}`;
+    if (seen.has(key)) { 
+      if (AUDIT_MODE) console.log(`[SKIP] Linha ${idx + 1}: Duplicata detectada: ${key}`);
+      duplicates++; 
+      continue; 
+    }
     seen.add(key);
     out.push(tx);
     rowsParsed++;

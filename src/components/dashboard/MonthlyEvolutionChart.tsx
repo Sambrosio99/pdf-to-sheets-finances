@@ -1,20 +1,21 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Transaction } from "@/types/finance";
+import { getValidTransactions } from "@/utils/transactionFilters";
 
 interface MonthlyEvolutionChartProps {
   transactions: Transaction[];
 }
 
 export const MonthlyEvolutionChart = ({ transactions }: MonthlyEvolutionChartProps) => {
-  // Filtrar apenas transações do último ano para evitar dados antigos
+  // Filtrar apenas transações válidas do último ano
   const oneYearAgo = new Date();
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
   
-  const recentTransactions = transactions.filter(transaction => {
+  const recentTransactions = getValidTransactions(transactions.filter(transaction => {
     const transactionDate = new Date(transaction.date);
     return transactionDate >= oneYearAgo;
-  });
+  }));
 
   // Se não há transações, mostrar mensagem
   if (recentTransactions.length === 0) {

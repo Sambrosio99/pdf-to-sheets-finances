@@ -15,6 +15,7 @@ import { CategoryTrendsChart } from "./CategoryTrendsChart";
 import { FixedVsVariableChart } from "./FixedVsVariableChart";
 import { SpendingPatternsChart } from "./SpendingPatternsChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getValidTransactions } from "@/utils/transactionFilters";
 
 interface EnhancedDashboardOverviewProps {
   transactions: Transaction[];
@@ -35,8 +36,9 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
         .reverse()[0]
     : new Date().toISOString().slice(0, 7);
   
-  const currentMonthTransactions = filteredTransactions.filter(t => 
-    t.date.startsWith(latestMonth)
+  // Função para filtrar transações válidas (excluir não concluídas/estornadas)
+  const validCurrentTransactions = getValidTransactions(
+    filteredTransactions.filter(t => t.date.startsWith(latestMonth))
   );
 
   // Calcular mês anterior para comparação
@@ -47,23 +49,23 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
   })();
 
-  const previousMonthTransactions = filteredTransactions.filter(t => 
-    t.date.startsWith(previousMonth)
+  const validPreviousTransactions = getValidTransactions(
+    filteredTransactions.filter(t => t.date.startsWith(previousMonth))
   );
 
-  const totalIncome = currentMonthTransactions
+  const totalIncome = validCurrentTransactions
     .filter(t => t.type === 'income')
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
-  const totalExpenses = currentMonthTransactions
+  const totalExpenses = validCurrentTransactions
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
-  const previousIncome = previousMonthTransactions
+  const previousIncome = validPreviousTransactions
     .filter(t => t.type === 'income')
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
-  const previousExpenses = previousMonthTransactions
+  const previousExpenses = validPreviousTransactions
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
@@ -101,7 +103,7 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
 
   // Calcular progresso das metas
   const monthlyGoalSavings = 336; // 20% da renda para reserva de emergência
-  const currentSavings = currentMonthTransactions
+  const currentSavings = validCurrentTransactions
     .filter(t => t.type === 'expense')
     .filter(t => {
       const mappedCategory = mapTransactionToCategory(t.description, t.category);
@@ -113,7 +115,7 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
   
   // Calcular gastos fixos baseado nas categorias de despesas recorrentes
   const fixedCategories = ['Faculdade', 'Celular', 'Academia'];
-  const fixedExpenses = currentMonthTransactions
+  const fixedExpenses = validCurrentTransactions
     .filter(t => t.type === 'expense')
     .filter(t => {
       const mappedCategory = mapTransactionToCategory(t.description, t.category);
@@ -257,7 +259,7 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalIncome)}</div>
             <p className="text-xs opacity-90 mt-1">
-              {currentMonthTransactions.filter(t => t.type === 'income').length} transações
+              {validCurrentTransactions.filter(t => t.type === 'income').length} transações
             </p>
           </CardContent>
         </Card>
@@ -272,7 +274,7 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalExpenses)}</div>
             <p className="text-xs opacity-90 mt-1">
-              {currentMonthTransactions.filter(t => t.type === 'expense').length} transações
+              {validCurrentTransactions.filter(t => t.type === 'expense').length} transações
             </p>
           </CardContent>
         </Card>

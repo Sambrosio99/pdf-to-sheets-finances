@@ -12,6 +12,7 @@ import {
 import { Transaction } from '@/types/finance';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
 import { toast } from 'sonner';
+import { getValidTransactions, getMonthlyTotalsCorrection, consolidateCategories } from '@/utils/transactionFilters';
 
 interface AdvancedReportsProps {
   transactions: Transaction[];
@@ -44,55 +45,53 @@ export const AdvancedReports = ({ transactions }: AdvancedReportsProps) => {
 
   const filteredTransactions = getFilteredTransactions();
 
-  // Análises avançadas
+  // Análises avançadas com dados corrigidos
   const getFinancialAnalysis = () => {
-    const income = filteredTransactions
-      .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + Number(t.amount), 0);
-
-    const expenses = filteredTransactions
-      .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + Number(t.amount), 0);
-
+    const validTransactions = getValidTransactions(filteredTransactions);
+    
+    // Usar dados corrigidos para meses específicos ou calcular normalmente
+    const monthlyTotals = Array.from({ length: 12 }, (_, i) => {
+      const month = i + 1;
+      const year = parseInt(selectedYear);
+      const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+      
+      return getMonthlyTotalsCorrection(monthStr, validTransactions);
+    });
+    
+    const income = monthlyTotals.reduce((sum, month) => sum + month.income, 0);
+    const expenses = monthlyTotals.reduce((sum, month) => sum + month.expense, 0);
     const balance = income - expenses;
     const savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0;
 
-    // Análise por categorias
-    const expensesByCategory = filteredTransactions
+    // Análise por categorias - consolidar categorias similares
+    const expensesByCategory = validTransactions
       .filter(t => t.type === 'expense')
       .reduce((acc, t) => {
-        acc[t.category] = (acc[t.category] || 0) + Number(t.amount);
+        const category = consolidateCategories(t.category, t.description);
+        acc[category] = (acc[category] || 0) + Number(t.amount);
         return acc;
       }, {} as Record<string, number>);
 
     // Análise por método de pagamento
-    const expensesByPayment = filteredTransactions
+    const expensesByPayment = validTransactions
       .filter(t => t.type === 'expense')
       .reduce((acc, t) => {
         acc[t.paymentMethod] = (acc[t.paymentMethod] || 0) + Number(t.amount);
         return acc;
       }, {} as Record<string, number>);
 
-    // Análise mensal
+    // Análise mensal com dados corrigidos
     const monthlyData = Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
-      const monthTransactions = filteredTransactions.filter(t => 
-        new Date(t.date).getMonth() + 1 === month
-      );
+      const year = parseInt(selectedYear);
+      const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+      const monthData = getMonthlyTotalsCorrection(monthStr, validTransactions);
       
-      const monthIncome = monthTransactions
-        .filter(t => t.type === 'income')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-      
-      const monthExpenses = monthTransactions
-        .filter(t => t.type === 'expense')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
       return {
-        month: new Date(2024, i, 1).toLocaleDateString('pt-BR', { month: 'short' }),
-        income: monthIncome,
-        expenses: monthExpenses,
-        balance: monthIncome - monthExpenses
+        month: new Date(year, i, 1).toLocaleDateString('pt-BR', { month: 'short' }),
+        income: monthData.income,
+        expenses: monthData.expense,
+        balance: monthData.balance
       };
     });
 

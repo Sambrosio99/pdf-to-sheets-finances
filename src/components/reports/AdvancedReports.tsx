@@ -12,7 +12,7 @@ import {
 import { Transaction } from '@/types/finance';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
 import { toast } from 'sonner';
-import { getValidTransactions, getMonthlyTotalsCorrection, consolidateCategories } from '@/utils/transactionFilters';
+import { getValidTransactions, getMonthlyTotalsCorrection, consolidateCategories, calculateSavingsRate, calculateAverageExpense, validateMonthlyTotals } from '@/utils/transactionFilters';
 
 interface AdvancedReportsProps {
   transactions: Transaction[];
@@ -49,111 +49,131 @@ export const AdvancedReports = ({ transactions }: AdvancedReportsProps) => {
   const getFinancialAnalysis = () => {
     const validTransactions = getValidTransactions(filteredTransactions);
     
-    // Usar dados corrigidos para meses específicos ou calcular normalmente
-    const monthlyTotals = Array.from({ length: 12 }, (_, i) => {
-      const month = i + 1;
-      const year = parseInt(selectedYear);
-      const monthStr = `${year}-${String(month).padStart(2, '0')}`;
-      
-      return getMonthlyTotalsCorrection(monthStr, validTransactions);
-    });
+    // Calcular totais mensais usando correções
+    const monthlyData: any[] = [];
+    const months = Array.from(new Set(validTransactions.map(t => t.date.slice(0, 7)))).sort();
     
-    const income = monthlyTotals.reduce((sum, month) => sum + month.income, 0);
-    const expenses = monthlyTotals.reduce((sum, month) => sum + month.expense, 0);
-    const balance = income - expenses;
-    const savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0;
-
-    // Análise por categorias - consolidar categorias similares
-    const expensesByCategory = validTransactions
-      .filter(t => t.type === 'expense')
-      .reduce((acc, t) => {
-        const category = consolidateCategories(t.category, t.description);
-        acc[category] = (acc[category] || 0) + Number(t.amount);
-        return acc;
-      }, {} as Record<string, number>);
-
-    // Análise por método de pagamento
-    const expensesByPayment = validTransactions
-      .filter(t => t.type === 'expense')
-      .reduce((acc, t) => {
-        acc[t.paymentMethod] = (acc[t.paymentMethod] || 0) + Number(t.amount);
-        return acc;
-      }, {} as Record<string, number>);
-
-    // Análise mensal com dados corrigidos
-    const monthlyData = Array.from({ length: 12 }, (_, i) => {
-      const month = i + 1;
-      const year = parseInt(selectedYear);
-      const monthStr = `${year}-${String(month).padStart(2, '0')}`;
-      const monthData = getMonthlyTotalsCorrection(monthStr, validTransactions);
+    let totalIncome = 0;
+    let totalExpenses = 0;
+    
+    for (const month of months) {
+      const corrected = getMonthlyTotalsCorrection(month, validTransactions);
+      totalIncome += corrected.income;
+      totalExpenses += corrected.expense;
       
-      return {
-        month: new Date(year, i, 1).toLocaleDateString('pt-BR', { month: 'short' }),
-        income: monthData.income,
-        expenses: monthData.expense,
-        balance: monthData.balance
-      };
-    });
+      monthlyData.push({
+        month: new Date(month + '-01').toLocaleDateString('pt-BR', { month: 'short' }),
+        income: corrected.income,
+        expenses: corrected.expense,
+        balance: corrected.balance
+      });
+    }
+
+    const totalBalance = totalIncome - totalExpenses;
+    const savingsRate = calculateSavingsRate(totalIncome, totalBalance);
+    const averageExpense = calculateAverageExpense(monthlyData);
+
+    // Validar categorização para cada mês
+    const insights: any[] = [];
+    let allCategoriesValid = true;
+    
+    for (const month of months) {
+      const monthTransactions = validTransactions.filter(t => t.date.startsWith(month));
+      const corrected = getMonthlyTotalsCorrection(month, validTransactions);
+      
+      const categorizedIncome = monthTransactions
+        .filter(t => t.type === 'income')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+      const categorizedExpense = monthTransactions
+        .filter(t => t.type === 'expense')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+      
+      const isValid = validateMonthlyTotals(
+        corrected.income, 
+        corrected.expense, 
+        categorizedIncome, 
+        categorizedExpense, 
+        month
+      );
+      
+      if (!isValid) allCategoriesValid = false;
+    }
+
+    // Análise de despesas por categoria
+    const expensesByCategory: Record<string, number> = {};
+    const expensesByPayment: Record<string, number> = {};
+    
+    for (const tx of validTransactions) {
+      if (tx.type === 'expense') {
+        const consolidatedCategory = consolidateCategories(tx.category, tx.description);
+        expensesByCategory[consolidatedCategory] = (expensesByCategory[consolidatedCategory] || 0) + tx.amount;
+        expensesByPayment[tx.paymentMethod] = (expensesByPayment[tx.paymentMethod] || 0) + tx.amount;
+      }
+    }
 
     // Insights inteligentes
-    const insights = [];
-    
-    if (savingsRate < 10) {
-      insights.push({
-        type: 'warning',
-        icon: AlertTriangle,
-        title: 'Taxa de Poupança Baixa',
-        description: `Sua taxa de poupança é de ${formatPercentage(savingsRate)}. O recomendado é pelo menos 10%.`,
-        action: 'Revise seus gastos fixos e procure oportunidades de economia.'
-      });
-    } else if (savingsRate >= 20) {
+    if (savingsRate > 0.2) {
       insights.push({
         type: 'success',
         icon: Target,
-        title: 'Excelente Controle Financeiro',
-        description: `Parabéns! Sua taxa de poupança de ${formatPercentage(savingsRate)} está acima da meta.`,
+        title: 'Excelente Taxa de Poupança',
+        description: `Sua taxa de poupança de ${(savingsRate * 100).toFixed(1)}% está acima da meta.`,
         action: 'Continue assim e considere investir o excedente.'
       });
-    }
-
-    const topCategory = Object.entries(expensesByCategory)
-      .sort(([,a], [,b]) => b - a)[0];
-    
-    if (topCategory && (topCategory[1] / expenses) > 0.3) {
+    } else if (savingsRate < 0) {
       insights.push({
-        type: 'info',
-        icon: PieChart,
-        title: 'Concentração de Gastos',
-        description: `${formatPercentage((topCategory[1] / expenses) * 100)} dos seus gastos são em "${topCategory[0]}".`,
-        action: 'Considere diversificar seus gastos ou otimizar esta categoria.'
+        type: 'warning',
+        icon: AlertTriangle,
+        title: 'Taxa de Poupança Negativa',
+        description: `Sua taxa de poupança é de ${(savingsRate * 100).toFixed(1)}%. Recomenda-se revisar gastos.`,
+        action: 'Analise suas despesas e corte gastos desnecessários.'
       });
     }
-
-    // Detecção de padrões
-    const averageMonthlyExpense = expenses / 12;
-    const highSpendingMonths = monthlyData.filter(m => m.expenses > averageMonthlyExpense * 1.2);
     
-    if (highSpendingMonths.length > 0) {
+    if (averageExpense > 2000) {
       insights.push({
         type: 'info',
         icon: TrendingUp,
-        title: 'Padrões de Gastos',
-        description: `Você gastou mais que a média em ${highSpendingMonths.map(m => m.month).join(', ')}.`,
-        action: 'Analise o que causou esses picos para planejar melhor o orçamento.'
+        title: 'Gasto Médio Elevado',
+        description: `Gasto médio mensal: R$ ${averageExpense.toFixed(2)}`,
+        action: 'Considere criar um orçamento mais restritivo.'
+      });
+    }
+    
+    if (!allCategoriesValid) {
+      insights.push({
+        type: 'warning',
+        icon: Eye,
+        title: 'Inconsistências Detectadas',
+        description: 'Detectadas inconsistências na categorização. Verifique os logs para detalhes.',
+        action: 'Revise a categorização das transações.'
+      });
+    }
+
+    const biggestExpenseCategory = Object.entries(expensesByCategory)
+      .sort(([,a], [,b]) => b - a)[0];
+    
+    if (biggestExpenseCategory) {
+      insights.push({
+        type: 'info',
+        icon: PieChart,
+        title: 'Maior Categoria de Gasto',
+        description: `${biggestExpenseCategory[0]}: R$ ${biggestExpenseCategory[1].toFixed(2)}`,
+        action: 'Monitore esta categoria de perto para otimizar gastos.'
       });
     }
 
     return {
-      income,
-      expenses,
-      balance,
-      savingsRate,
+      income: totalIncome,
+      expenses: totalExpenses,
+      balance: totalBalance,
+      savingsRate: savingsRate * 100,
+      averageMonthlyExpense: averageExpense,
       expensesByCategory,
       expensesByPayment,
       monthlyData,
       insights,
-      averageMonthlyExpense,
-      topCategory
+      topCategory: biggestExpenseCategory
     };
   };
 

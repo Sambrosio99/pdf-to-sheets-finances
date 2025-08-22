@@ -11,6 +11,7 @@ export interface Transacao {
   status: 'paid';
   origin: 'extrato' | 'fatura';
   includeInTotals: boolean;   // extrato=true, fatura=false
+  transactionId?: string;     // ID único para reconciliação
 }
 
 // ===================== Audit Config =====================
@@ -175,36 +176,66 @@ function formatDate(dateStr: string): string {
   return '';
 }
 
-// Valores para FATURA (reais com parsing melhorado)
-function parseNubankValue(valueStr: string): number {
-  const cleaned = (valueStr ?? '').replace('R$', '').trim();
-  const isCentavos = /^-?\d+$/.test(cleaned);
-  const isReaisBr  = /^-?[\d\.]*\,\d{2}$/.test(cleaned);
-  const isDotDec   = /^-?\d+\.\d{2}$/.test(cleaned);
+// Detecta locale por arquivo baseado em amostra
+function detectFileLocale(lines: string[]): 'pt-BR' | 'en-US' {
+  const sampleValues = lines.slice(0, 20).map(line => {
+    const parts = splitCSVSafe(line);
+    return parts.find(part => /[\d,\.]/.test(part)) || '';
+  }).filter(Boolean);
+  
+  let commaDecimal = 0;
+  let dotDecimal = 0;
+  
+  for (const value of sampleValues) {
+    if (/\d+,\d{2}$/.test(value)) commaDecimal++;
+    if (/\d+\.\d{2}$/.test(value)) dotDecimal++;
+  }
+  
+  return commaDecimal > dotDecimal ? 'pt-BR' : 'en-US';
+}
 
+// Valores para FATURA com detecção de locale
+function parseNubankValue(valueStr: string, locale: 'pt-BR' | 'en-US' = 'pt-BR'): number {
+  const cleaned = (valueStr ?? '').replace('R$', '').trim();
+  
+  // Só use centavos puros se o arquivo não tiver formato decimal claro
+  const hasDecimalFormat = /[\d,\.][\d]{2}$/.test(cleaned);
+  const isCentavos = /^-?\d+$/.test(cleaned) && !hasDecimalFormat;
+  
+  if (locale === 'pt-BR') {
+    const isReaisBr = /^-?[\d\.]*\,\d{2}$/.test(cleaned);
+    if (isReaisBr) return parseFloat(cleaned.replace(/\./g,'').replace(',','.'));
+  } else {
+    const isDotDec = /^-?\d+\.\d{2}$/.test(cleaned);
+    if (isDotDec) return parseFloat(cleaned);
+  }
+  
   if (isCentavos) return parseFloat(cleaned) / 100;
-  if (isReaisBr)  return parseFloat(cleaned.replace(/\./g,'').replace(',','.'));
-  if (isDotDec)   return parseFloat(cleaned);
   return parseFloat(cleaned.replace(',','.'));
 }
 
-// Extrato: interpretar valor de forma robusta.
-// Regra: extrato NU_* é centavos por padrão.
-// Se vier claramente em reais (vírgula/ponto com 2 decimais), usamos como reais.
-function parseExtratoValor(valorStr: string): number {
+// Extrato com detecção de locale
+function parseExtratoValor(valorStr: string, locale: 'pt-BR' | 'en-US' = 'pt-BR'): number {
   const s = (valorStr ?? '').replace('R$', '').trim();
 
-  const isCentavos     = /^-?\d+$/.test(s);                  // "320556"
-  const isReaisBR      = /^-?[\d\.]*\,\d{2}$/.test(s);       // "3.205,56"
-  const isDotDecimal   = /^-?\d+\.\d{2}$/.test(s);           // "3205.56"
-  const isThousandOnly = /^-?\d{1,3}(\.\d{3})+$/.test(s);    // "320.556" (sem decimais)
+  // Só use centavos puros se não houver formato decimal evidente
+  const hasDecimalFormat = /[\d,\.][\d]{2}$/.test(s);
+  const isCentavos = /^-?\d+$/.test(s) && !hasDecimalFormat;
+  
+  if (locale === 'pt-BR') {
+    const isReaisBR = /^-?[\d\.]*\,\d{2}$/.test(s);
+    const isThousandOnly = /^-?\d{1,3}(\.\d{3})+$/.test(s);
+    
+    if (isReaisBR) return parseFloat(s.replace(/\./g,'').replace(',','.'));
+    if (isThousandOnly && !hasDecimalFormat) return parseInt(s.replace(/\./g,''), 10) / 100;
+  } else {
+    const isDotDecimal = /^-?\d+\.\d{2}$/.test(s);
+    if (isDotDecimal) return parseFloat(s);
+  }
 
-  if (isReaisBR)      return parseFloat(s.replace(/\./g,'').replace(',','.')); // reais
-  if (isDotDecimal)   return parseFloat(s);                                     // reais
-  if (isThousandOnly) return parseInt(s.replace(/\./g,''), 10) / 100;          // centavos
-  if (isCentavos)     return parseInt(s, 10) / 100;                             // centavos
-
-  const n = Number(s.replace(',', '.')); return Number.isFinite(n) ? n : NaN;
+  if (isCentavos) return parseInt(s, 10) / 100;
+  const n = Number(s.replace(',', '.')); 
+  return Number.isFinite(n) ? n : NaN;
 }
 
 // Categorias (ajuste às suas regras)
@@ -234,8 +265,8 @@ function getPaymentMethod(description: string): string {
 
 // ===================== Parsers por arquivo =====================
 
-// Extrato NU_*.csv → usa parseExtratoValor
-function parseExtratoLine(rawLine: string): Transacao | null {
+// Extrato NU_*.csv → usa parseExtratoValor com locale
+function parseExtratoLine(rawLine: string, locale: 'pt-BR' | 'en-US' = 'pt-BR', transactionId?: string): Transacao | null {
   const parts = splitCSVSafe(rawLine.replace(/\r$/, ''));
   if (parts.length < 4) return null;
 
@@ -244,7 +275,7 @@ function parseExtratoLine(rawLine: string): Transacao | null {
   if (/^\s*(data|date)\s*$/i.test(dataStr)) return null;
 
   const date = formatDate(dataStr); if (!date) return null;
-  const valor = parseExtratoValor(valorStr); if (!Number.isFinite(valor)) return null;
+  const valor = parseExtratoValor(valorStr, locale); if (!Number.isFinite(valor)) return null;
 
   const amount = Math.abs(valor); if (amount === 0) return null;
   const type: TxType = valor > 0 ? 'income' : 'expense';
@@ -255,11 +286,12 @@ function parseExtratoLine(rawLine: string): Transacao | null {
     paymentMethod: getPaymentMethod(descricao || ''),
     amount, type, status: 'paid',
     origin: 'extrato', includeInTotals: true,
+    transactionId
   };
 }
 
-// Fatura Nubank_*.csv → já em reais (detalhamento)
-function parseFaturaLine(rawLine: string): Transacao | null {
+// Fatura Nubank_*.csv → já em reais com locale
+function parseFaturaLine(rawLine: string, locale: 'pt-BR' | 'en-US' = 'pt-BR', transactionId?: string): Transacao | null {
   const parts = splitCSVSafe(rawLine.replace(/\r$/, ''));
   if (parts.length < 3) return null;
 
@@ -268,7 +300,7 @@ function parseFaturaLine(rawLine: string): Transacao | null {
   if (/^\s*(data|date)\s*$/i.test(dataStr)) return null;
 
   const date = formatDate(dataStr); if (!date) return null;
-  const v = parseNubankValue(valorStr); if (!Number.isFinite(v)) return null;
+  const v = parseNubankValue(valorStr, locale); if (!Number.isFinite(v)) return null;
 
   const amount = Math.abs(v); if (amount === 0) return null;
   const isEstorno = (descricao || '').toLowerCase().includes('estorno');
@@ -280,7 +312,61 @@ function parseFaturaLine(rawLine: string): Transacao | null {
     paymentMethod: 'Cartão de Crédito',
     amount, type, status: 'paid',
     origin: 'fatura', includeInTotals: false,
+    transactionId
   };
+}
+
+// Reconcilia pares de transações (PIX envio-estorno, ajustes)
+function reconcileTransactionPairs(transactions: Transacao[]): Transacao[] {
+  const reconciled: Transacao[] = [];
+  const processed = new Set<string>();
+  
+  for (let i = 0; i < transactions.length; i++) {
+    const tx = transactions[i];
+    const key = `${tx.date}_${tx.description}_${tx.amount.toFixed(2)}`;
+    
+    if (processed.has(key)) continue;
+    
+    // Procura por pares PIX envio-estorno
+    if (tx.description.toLowerCase().includes('pix') && tx.type === 'expense') {
+      const estorno = transactions.find((other, j) => 
+        j > i &&
+        !processed.has(`${other.date}_${other.description}_${other.amount.toFixed(2)}`) &&
+        other.description.toLowerCase().includes('estorno') &&
+        Math.abs(tx.amount - other.amount) < 0.01 &&
+        Math.abs(new Date(other.date).getTime() - new Date(tx.date).getTime()) <= 24 * 60 * 60 * 1000 // 24h
+      );
+      
+      if (estorno) {
+        // Efeito líquido 0 - não adiciona nem o envio nem o estorno
+        processed.add(key);
+        processed.add(`${estorno.date}_${estorno.description}_${estorno.amount.toFixed(2)}`);
+        continue;
+      }
+    }
+    
+    // Procura por ajustes de débito
+    if (tx.description.toLowerCase().includes('ajuste') && tx.type === 'expense') {
+      const compraOriginal = transactions.find((other, j) => 
+        j !== i &&
+        !processed.has(`${other.date}_${other.description}_${other.amount.toFixed(2)}`) &&
+        other.type === 'expense' &&
+        Math.abs(tx.amount - other.amount) < 0.01 &&
+        Math.abs(new Date(other.date).getTime() - new Date(tx.date).getTime()) <= 7 * 24 * 60 * 60 * 1000 // 7 dias
+      );
+      
+      if (compraOriginal) {
+        // Mantém apenas a compra original
+        processed.add(key);
+        continue;
+      }
+    }
+    
+    reconciled.push(tx);
+    processed.add(key);
+  }
+  
+  return reconciled;
 }
 
 // ===================== Coordenador =====================
@@ -306,6 +392,9 @@ export function parseCSVFile(fileContent: string, fileName: string): Transacao[]
 
   // Normaliza EOL e remove BOM, depois remove linhas vazias
   const lines = fileContent.replace(/\r/g, '').split('\n').filter(Boolean);
+  
+  // Detecta locale do arquivo
+  const locale = detectFileLocale(lines);
 
   // Detecta cabeçalho pela primeira célula (removendo BOM se existir)
   const firstCells = splitCSVSafe((lines[0] || '').replace(/^\uFEFF/, ''));
@@ -354,24 +443,28 @@ export function parseCSVFile(fileContent: string, fileName: string): Transacao[]
   const isExtrato = fileName.includes('NU_');
   const isFatura = fileName.includes('Nubank_');
   
-  // Usar Map para dedupe inteligente (preferir extrato sobre fatura)
+  // Usar Map para dedupe robusto com chave melhorada
   const mapByKey = new Map<string, Transacao>();
   let rowsTotal = dataLines.length, rowsParsed = 0;
   let invalidDate = 0, invalidValue = 0, zeroAmount = 0, duplicates = 0;
   let unwrappedEmbeddedCSV = false;
   const sampleRows: any[] = [];
   const byPayment: Record<string, { income: number; expense: number }> = {};
+  const transactions: Transacao[] = [];
 
   for (let idx = 0; idx < dataLines.length; idx++) {
     const rawLine = dataLines[idx];
     const parts0 = splitCSVSafe(rawLine.replace(/\r$/, ''));
     if (parts0.length === 1 && parts0[0].includes(',')) unwrappedEmbeddedCSV = true;
 
-    let tx = isExtrato ? parseExtratoLine(rawLine) : parseFaturaLine(rawLine);
+    // Gera ID único baseado em posição e conteúdo
+    const transactionId = `${fileName}_${idx}_${Date.now()}`;
+    
+    let tx = isExtrato ? parseExtratoLine(rawLine, locale, transactionId) : parseFaturaLine(rawLine, locale, transactionId);
     if (!tx && !isExtrato && !isFatura) {
       const cols = splitCSVSafe(rawLine.replace(/\r$/, ''));
-      tx = (cols.length >= 4) ? parseExtratoLine(rawLine) : 
-           (cols.length >= 3) ? parseFaturaLine(rawLine) : null;
+      tx = (cols.length >= 4) ? parseExtratoLine(rawLine, locale, transactionId) : 
+           (cols.length >= 3) ? parseFaturaLine(rawLine, locale, transactionId) : null;
     }
     if (!tx) {
       if (AUDIT_MODE) console.log(`[SKIP] Linha ${idx + 1}: Não foi possível fazer parse: ${rawLine.substring(0, 100)}...`);
@@ -394,15 +487,24 @@ export function parseCSVFile(fileContent: string, fileName: string): Transacao[]
       zeroAmount++; continue;
     }
 
-    const key = `${tx.date}||${String(tx.description).toLowerCase().trim()}||${tx.amount.toFixed(2)}`;
+    // Chave robusta: fonte + data com bucket de hora + descrição normalizada + valor com sinal + ID se houver
+    const normalizedDesc = tx.description.toLowerCase().trim().replace(/\s+/g, ' ');
+    const valueWithSign = tx.type === 'expense' ? -tx.amount : tx.amount;
+    const dateHourBucket = tx.date; // Para agora, apenas data (pode expandir para incluir hora se disponível)
+    const key = `NU|${dateHourBucket}|${normalizedDesc}|${valueWithSign.toFixed(2)}|${tx.transactionId || ''}`;
+    
     const existing = mapByKey.get(key);
 
     if (!existing) {
       mapByKey.set(key, tx);
+      transactions.push(tx);
     } else {
-      // preferir extrato (consolidado) sobre fatura (detalhamento)
+      // Prioridade: Extrato > Fatura, mas sem esconder despesas reais
       if (existing.origin === 'fatura' && tx.origin === 'extrato') {
         mapByKey.set(key, tx);
+        // Substitui na lista também
+        const existingIndex = transactions.findIndex(t => t.transactionId === existing.transactionId);
+        if (existingIndex !== -1) transactions[existingIndex] = tx;
         if (AUDIT_MODE) console.log(`[REPLACE] Substituindo fatura por extrato: ${key}`);
       } else {
         if (AUDIT_MODE) console.log(`[SKIP] Linha ${idx + 1}: Duplicata detectada: ${key}`);
@@ -412,8 +514,11 @@ export function parseCSVFile(fileContent: string, fileName: string): Transacao[]
     rowsParsed++;
   }
 
-  // Converter Map para Array
-  const out = Array.from(mapByKey.values());
+  // Reconcilia pares de transações
+  const reconciledTransactions = reconcileTransactionPairs(transactions);
+  
+  // Converter para Array final
+  const out = reconciledTransactions;
 
   // Auditoria e estatísticas
   for (const tx of out) {

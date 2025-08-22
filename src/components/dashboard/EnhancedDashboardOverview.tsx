@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Transaction } from "@/types/finance";
-import { TrendingUp, TrendingDown, DollarSign, PieChart, AlertCircle, Target, CheckCircle } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, PieChart, AlertCircle, Target, CheckCircle, Calendar } from "lucide-react";
 import { ExpenseChart } from "./ExpenseChart";
 import { CategoryChart } from "./CategoryChart";
 import { MonthlyEvolutionChart } from "./MonthlyEvolutionChart";
@@ -15,6 +15,7 @@ import { CategoryTrendsChart } from "./CategoryTrendsChart";
 import { FixedVsVariableChart } from "./FixedVsVariableChart";
 import { SpendingPatternsChart } from "./SpendingPatternsChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getValidTransactions } from "@/utils/transactionFilters";
 
 interface EnhancedDashboardOverviewProps {
@@ -24,26 +25,36 @@ interface EnhancedDashboardOverviewProps {
 export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOverviewProps) => {
   const [filteredTransactions, setFilteredTransactions] = useState(transactions);
   
+  // Encontrar todos os meses disponíveis
+  const availableMonths = transactions.length > 0 
+    ? Array.from(new Set(transactions.map(t => t.date.slice(0, 7))))
+        .sort()
+        .reverse()
+    : [new Date().toISOString().slice(0, 7)];
+  
+  // Mês selecionado (padrão: mais recente)
+  const [selectedMonth, setSelectedMonth] = useState(availableMonths[0] || new Date().toISOString().slice(0, 7));
+  
   // Atualizar filteredTransactions quando transactions mudarem
   useEffect(() => {
     setFilteredTransactions(transactions);
   }, [transactions]);
-  // Encontrar o mês mais recente nas transações
-  const latestMonth = filteredTransactions.length > 0 
-    ? filteredTransactions
-        .map(t => t.date.slice(0, 7))
-        .sort()
-        .reverse()[0]
-    : new Date().toISOString().slice(0, 7);
+  
+  // Atualizar mês selecionado quando novas transações chegarem
+  useEffect(() => {
+    if (availableMonths.length > 0 && !availableMonths.includes(selectedMonth)) {
+      setSelectedMonth(availableMonths[0]);
+    }
+  }, [availableMonths, selectedMonth]);
   
   // Função para filtrar transações válidas (excluir não concluídas/estornadas)
   const validCurrentTransactions = getValidTransactions(
-    filteredTransactions.filter(t => t.date.startsWith(latestMonth))
+    filteredTransactions.filter(t => t.date.startsWith(selectedMonth))
   );
 
   // Calcular mês anterior para comparação
   const previousMonth = (() => {
-    const [year, month] = latestMonth.split('-');
+    const [year, month] = selectedMonth.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1, 1);
     date.setMonth(date.getMonth() - 1);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -139,14 +150,38 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
       {/* Resumo Executivo Estratégico */}
       <Card className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white border-0 shadow-xl">
         <CardHeader>
-          <CardTitle className="text-2xl">🧠 Análise Estratégica - {(() => {
-            const [year, month] = latestMonth.split('-');
-            const date = new Date(parseInt(year), parseInt(month) - 1, 1);
-            return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-          })()}</CardTitle>
-          <CardDescription className="text-indigo-100">
-            Insights inteligentes e tendências para suas decisões financeiras
-          </CardDescription>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <CardTitle className="text-2xl">🧠 Análise Estratégica - {(() => {
+                const [year, month] = selectedMonth.split('-');
+                const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+              })()}</CardTitle>
+              <CardDescription className="text-indigo-100">
+                Insights inteligentes e tendências para suas decisões financeiras
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-white/70" />
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-[180px] bg-white/10 border-white/20 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableMonths.map(month => {
+                    const [year, monthNum] = month.split('-');
+                    const date = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
+                    const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                    return (
+                      <SelectItem key={month} value={month}>
+                        {monthName}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -199,18 +199,20 @@ function parseNubankValue(valueStr: string, locale: 'pt-BR' | 'en-US' = 'pt-BR')
   const cleaned = (valueStr ?? '').replace(/R\$\s*/, '').trim();
   if (!cleaned) return NaN;
   
-  if (locale === 'pt-BR') {
-    // Formato brasileiro com vírgula decimal: 3.205,56 ou 3205,56
-    const isReaisBr = /^-?[\d\.]*\,\d{2}$/.test(cleaned);
-    if (isReaisBr) return parseFloat(cleaned.replace(/\./g,'').replace(',','.'));
-  } else {
-    // Formato americano com ponto decimal: 3205.56
-    const isDotDec = /^-?[\d,]*\.\d{2}$/.test(cleaned);
-    if (isDotDec) return parseFloat(cleaned.replace(/,/g,''));
+  // Detecta formato brasileiro com vírgula decimal: 3.205,56
+  const isBrazilianFormat = /^-?[\d\.]+\,\d{2}$/.test(cleaned);
+  if (isBrazilianFormat) {
+    return parseFloat(cleaned.replace(/\./g,'').replace(',','.'));
+  }
+  
+  // Detecta formato americano com ponto decimal: 3205.56 ou 3,205.56
+  const isAmericanFormat = /^-?[\d,]+\.\d{2}$/.test(cleaned);
+  if (isAmericanFormat) {
+    return parseFloat(cleaned.replace(/,/g,''));
   }
   
   // Centavos puros (apenas dígitos): 320556 -> 3205.56
-  const isCentavos = /^-?\d+$/.test(cleaned);
+  const isCentavos = /^-?\d+$/.test(cleaned) && cleaned.length >= 3;
   if (isCentavos) {
     const num = parseInt(cleaned, 10);
     return num / 100;

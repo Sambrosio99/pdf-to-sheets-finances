@@ -18,7 +18,7 @@ export interface Transacao {
 export const AUDIT_MODE = true;
 export const AUDIT_SAMPLING = true;
 export const AUDIT_MAX_LOG_LINES = 50;
-export const AUDIT_STRICT = true;
+export const AUDIT_STRICT = false;
 
 // Audit session state and helpers
 type AuditFileMeta = { fileName?: string; sizeBytes?: number; mimeType?: string };
@@ -196,22 +196,29 @@ function detectFileLocale(lines: string[]): 'pt-BR' | 'en-US' {
 
 // Valores para FATURA com detecção de locale
 function parseNubankValue(valueStr: string, locale: 'pt-BR' | 'en-US' = 'pt-BR'): number {
-  const cleaned = (valueStr ?? '').replace('R$', '').trim();
-  
-  // Só use centavos puros se o arquivo não tiver formato decimal claro
-  const hasDecimalFormat = /[\d,\.][\d]{2}$/.test(cleaned);
-  const isCentavos = /^-?\d+$/.test(cleaned) && !hasDecimalFormat;
+  const cleaned = (valueStr ?? '').replace(/R\$\s*/, '').trim();
+  if (!cleaned) return NaN;
   
   if (locale === 'pt-BR') {
+    // Formato brasileiro com vírgula decimal: 3.205,56 ou 3205,56
     const isReaisBr = /^-?[\d\.]*\,\d{2}$/.test(cleaned);
     if (isReaisBr) return parseFloat(cleaned.replace(/\./g,'').replace(',','.'));
   } else {
-    const isDotDec = /^-?\d+\.\d{2}$/.test(cleaned);
-    if (isDotDec) return parseFloat(cleaned);
+    // Formato americano com ponto decimal: 3205.56
+    const isDotDec = /^-?[\d,]*\.\d{2}$/.test(cleaned);
+    if (isDotDec) return parseFloat(cleaned.replace(/,/g,''));
   }
   
-  if (isCentavos) return parseFloat(cleaned) / 100;
-  return parseFloat(cleaned.replace(',','.'));
+  // Centavos puros (apenas dígitos): 320556 -> 3205.56
+  const isCentavos = /^-?\d+$/.test(cleaned);
+  if (isCentavos) {
+    const num = parseInt(cleaned, 10);
+    return num / 100;
+  }
+  
+  // Fallback para outros formatos
+  const fallback = parseFloat(cleaned.replace(/[^\d.-]/g, '').replace(',', '.'));
+  return isNaN(fallback) ? NaN : fallback;
 }
 
 // Extrato com detecção de locale

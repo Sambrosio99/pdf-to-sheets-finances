@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Transaction } from "@/types/finance";
-import { getValidTransactions } from "@/utils/transactionFilters";
+import { getValidTransactions, getMonthlyTotalsCorrection } from "@/utils/transactionFilters";
 
 interface MonthlyEvolutionChartProps {
   transactions: Transaction[];
@@ -37,37 +37,25 @@ export const MonthlyEvolutionChart = ({ transactions }: MonthlyEvolutionChartPro
     );
   }
 
-  // Agrupar por mês e calcular saldo acumulado
-  const monthlyData = recentTransactions.reduce((acc, transaction) => {
-    const month = transaction.date.slice(0, 7);
-    if (!acc[month]) {
-      acc[month] = { month, income: 0, expenses: 0, balance: 0 };
-    }
+  // Filtrar transações do último ano e usar dados corrigidos
+  const validTransactions = getValidTransactions(recentTransactions);
+  const months = Array.from(new Set(validTransactions.map(t => t.date.slice(0, 7)))).sort();
+  
+  // Calcular saldo de cada mês e acumulado usando correções
+  let accumulatedBalance = 0;
+  const sortedData = months.map(month => {
+    const correctedData = getMonthlyTotalsCorrection(month, validTransactions);
+    const monthlyBalance = correctedData.balance;
+    accumulatedBalance += monthlyBalance;
     
-    if (transaction.type === 'income') {
-      acc[month].income += Number(transaction.amount);
-    } else {
-      acc[month].expenses += Number(transaction.amount);
-    }
-    
-    return acc;
-  }, {} as Record<string, { month: string; income: number; expenses: number; balance: number; }>);
-
-  // Calcular saldo de cada mês e acumulado
-  const sortedData = Object.values(monthlyData)
-    .sort((a, b) => a.month.localeCompare(b.month))
-    .map((data, index, array) => {
-      const monthlyBalance = data.income - data.expenses;
-      const accumulatedBalance = array
-        .slice(0, index + 1)
-        .reduce((sum, item) => sum + (item.income - item.expenses), 0);
-      
-      return {
-        ...data,
-        balance: monthlyBalance,
-        accumulated: accumulatedBalance
-      };
-    });
+    return {
+      month,
+      income: correctedData.income,
+      expenses: correctedData.expense,
+      balance: monthlyBalance,
+      accumulated: accumulatedBalance
+    };
+  });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {

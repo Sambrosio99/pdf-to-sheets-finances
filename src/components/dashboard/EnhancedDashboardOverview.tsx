@@ -16,7 +16,7 @@ import { FixedVsVariableChart } from "./FixedVsVariableChart";
 import { SpendingPatternsChart } from "./SpendingPatternsChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getValidTransactions } from "@/utils/transactionFilters";
+import { getValidTransactions, getMonthlyTotalsCorrection } from "@/utils/transactionFilters";
 
 interface EnhancedDashboardOverviewProps {
   transactions: Transaction[];
@@ -60,27 +60,16 @@ export const EnhancedDashboardOverview = ({ transactions }: EnhancedDashboardOve
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
   })();
 
-  const validPreviousTransactions = getValidTransactions(
-    filteredTransactions.filter(t => t.date.startsWith(previousMonth))
-  );
+  // Usar dados corrigidos para o mês atual e anterior
+  const currentMonthData = getMonthlyTotalsCorrection(selectedMonth, filteredTransactions);
+  const previousMonthData = getMonthlyTotalsCorrection(previousMonth, filteredTransactions);
 
-  const totalIncome = validCurrentTransactions
-    .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalIncome = currentMonthData.income;
+  const totalExpenses = currentMonthData.expense;
+  const previousIncome = previousMonthData.income;
+  const previousExpenses = previousMonthData.expense;
 
-  const totalExpenses = validCurrentTransactions
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
-  const previousIncome = validPreviousTransactions
-    .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
-  const previousExpenses = validPreviousTransactions
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
-  const balance = totalIncome - totalExpenses;
+  const balance = currentMonthData.balance;
   
   // Calcular tendências e projeções
   const incomeVariation = previousIncome > 0 ? ((totalIncome - previousIncome) / previousIncome) * 100 : 0;

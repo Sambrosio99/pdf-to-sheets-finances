@@ -1,6 +1,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Transaction } from "@/types/finance";
+import { getMonthlyTotalsCorrection } from "@/utils/transactionFilters";
 import { TrendingUp, TrendingDown, AlertTriangle, Lightbulb, DollarSign } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -9,11 +10,10 @@ interface SmartInsightsProps {
 }
 
 export const SmartInsights = ({ transactions }: SmartInsightsProps) => {
-  const monthlyIncome = 1682;
   const fixedExpenses = { faculdade: 509, celular: 40, academia: 89 };
   const totalFixedExpenses = Object.values(fixedExpenses).reduce((sum, val) => sum + val, 0);
   
-  // Análise dos últimos 3 meses
+  // Análise dos últimos 3 meses usando dados corrigidos
   const last3Months = Array.from({length: 3}, (_, i) => {
     const date = new Date();
     date.setMonth(date.getMonth() - i);
@@ -21,12 +21,19 @@ export const SmartInsights = ({ transactions }: SmartInsightsProps) => {
   });
 
   const monthlyData = last3Months.map(month => {
-    const monthTransactions = transactions.filter(t => t.date.startsWith(month));
-    const expenses = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-    const income = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-    
-    return { month, expenses, income, balance: income - expenses };
+    const correctedData = getMonthlyTotalsCorrection(month, transactions);
+    return { 
+      month, 
+      expenses: correctedData.expense, 
+      income: correctedData.income, 
+      balance: correctedData.balance 
+    };
   });
+
+  // Usar dados corrigidos para receita mensal
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentMonthData = getMonthlyTotalsCorrection(currentMonth, transactions);
+  const monthlyIncome = currentMonthData.income;
 
   // Análise por categoria (últimos 3 meses)
   const categoryData = transactions

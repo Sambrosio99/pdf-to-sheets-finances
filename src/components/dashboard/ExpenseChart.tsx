@@ -2,6 +2,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Transaction } from "@/types/finance";
+import { getValidTransactions, getMonthlyTotalsCorrection } from "@/utils/transactionFilters";
 
 interface ExpenseChartProps {
   transactions: Transaction[];
@@ -28,23 +29,18 @@ export const ExpenseChart = ({ transactions }: ExpenseChartProps) => {
     );
   }
 
-  // Agrupar por mês
-  const monthlyData = transactions.reduce((acc, transaction) => {
-    const month = transaction.date.slice(0, 7);
-    if (!acc[month]) {
-      acc[month] = { month, income: 0, expenses: 0 };
-    }
-    
-    if (transaction.type === 'income') {
-      acc[month].income += Number(transaction.amount);
-    } else {
-      acc[month].expenses += Number(transaction.amount);
-    }
-    
-    return acc;
-  }, {} as Record<string, { month: string; income: number; expenses: number; }>);
-
-  const chartData = Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month));
+  // Usar dados corrigidos para cálculos mensais
+  const validTransactions = getValidTransactions(transactions);
+  const months = Array.from(new Set(validTransactions.map(t => t.date.slice(0, 7)))).sort();
+  
+  const chartData = months.map(month => {
+    const correctedData = getMonthlyTotalsCorrection(month, validTransactions);
+    return {
+      month,
+      income: correctedData.income,
+      expenses: correctedData.expense
+    };
+  });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {

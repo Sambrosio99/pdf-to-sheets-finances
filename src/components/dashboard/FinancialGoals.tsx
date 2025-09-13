@@ -2,6 +2,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Transaction } from "@/types/finance";
+import { getMonthlyTotalsCorrection } from "@/utils/transactionFilters";
 import { Target, TrendingUp, Landmark, Music, ShoppingBag } from "lucide-react";
 
 interface FinancialGoalsProps {
@@ -9,7 +10,10 @@ interface FinancialGoalsProps {
 }
 
 export const FinancialGoals = ({ transactions }: FinancialGoalsProps) => {
-  const monthlyIncome = 1682; // Salário fixo
+  // Calcular receitas mensais usando dados corrigidos
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const monthlyData = getMonthlyTotalsCorrection(currentMonth, transactions);
+  const monthlyIncome = monthlyData.income;
   const emergencyGoal = monthlyIncome * 3; // 3 salários para reserva de emergência
   
   // Função para mapear descrições para categorias (mesma lógica do BudgetPlanner)

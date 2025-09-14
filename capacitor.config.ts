@@ -8,6 +8,11 @@ const config: CapacitorConfig = {
     url: 'https://6a30b8db-a47e-48de-ab01-b3c0a8a2d9f1.lovableproject.com?forceHideBadge=true',
     cleartext: true
   },
+  android: {
+    allowMixedContent: true,
+    captureInput: true,
+    webContentsDebuggingEnabled: true
+  },
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
@@ -18,6 +23,15 @@ const config: CapacitorConfig = {
       showSpinner: false,
       splashFullScreen: true,
       splashImmersive: true
+    },
+    StatusBar: {
+      backgroundColor: "#8b5cf6",
+      style: "dark"
+    },
+    Keyboard: {
+      resize: "body",
+      style: "dark",
+      resizeOnFullScreen: true
     }
   }
 };

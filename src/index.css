@@ -103,3 +103,16 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* Mobile keyboard handling for Android */
+@media (max-width: 768px) {
+  .keyboard-open {
+    padding-bottom: 0;
+    transform: translateY(0);
+  }
+  
+  .keyboard-open .min-h-screen {
+    min-height: auto;
+    height: 100vh;
+  }
+}

@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,8 @@ import { Loader2 } from "lucide-react";
 export default function Index() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { transactions, loading, addTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, refetch } = useTransactions();
+
+  const navigate = useNavigate();
 
   const [isAddingTransaction, setIsAddingTransaction] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -44,7 +47,7 @@ export default function Index() {
             <CardDescription>Faça login para acessar o painel</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => window.location.href = '/auth'} className="w-full">
+            <Button onClick={() => navigate('/auth')} className="w-full">
               Ir para a página de login
             </Button>
           </CardContent>

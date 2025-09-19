@@ -4,6 +4,9 @@ const config: CapacitorConfig = {
   appId: 'com.finance.app',
   appName: 'pdf-to-sheets-finances',
   webDir: 'dist',
+  server: {
+    androidScheme: 'https'
+  },
   android: {
     allowMixedContent: true,
     captureInput: true,

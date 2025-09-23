@@ -13,6 +13,7 @@ import { GoogleSheetsIntegration } from "@/components/export/GoogleSheetsIntegra
 import { AdvancedReports } from "@/components/reports/AdvancedReports";
 import { PeriodComparison } from "@/components/reports/PeriodComparison";
 import { PasswordChangeForm } from "@/components/auth/PasswordChangeForm";
+import { NotificationTester } from "@/components/notifications/NotificationTester";
 import { useAuth } from "@/hooks/useAuth";
 import { useTransactions } from "@/hooks/useTransactions";
 import { LogOut, Wallet } from "lucide-react";
@@ -163,6 +164,8 @@ export default function Index() {
                 />
               </CardContent>
             </Card>
+            
+            <NotificationTester />
           </TabsContent>
 
           <TabsContent value="export" className="space-y-6">

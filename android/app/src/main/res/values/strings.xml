@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Financeiro Hugo</string>
+    <string name="title_activity_main">Financeiro Hugo</string>
+    <string name="package_name">app.lovable.financeirohugo</string>
+    <string name="custom_url_scheme">app.lovable.financeirohugo</string>
+    <string name="notification_listener_service">Captura de Transações</string>
+</resources>
